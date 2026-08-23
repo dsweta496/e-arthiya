@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const produceLotSchema = new mongoose.Schema(
+const supplyIntentSchema = new mongoose.Schema(
   {
     farmer: {
       type: mongoose.Schema.Types.ObjectId,
@@ -19,7 +19,7 @@ const produceLotSchema = new mongoose.Schema(
       trim: true,
     },
 
-    quantity: {
+    expectedQuantity: {
       type: Number,
       required: true,
       min: 0,
@@ -31,16 +31,12 @@ const produceLotSchema = new mongoose.Schema(
       required: true,
     },
 
-    expectedPrice: {
-      type: Number,
-      min: 0,
-    },
-
-    harvestDate: {
+    expectedHarvestDate: {
       type: Date,
+      required: true,
     },
 
-    qualityGrade: {
+    qualityExpectation: {
       type: String,
       trim: true,
     },
@@ -51,21 +47,6 @@ const produceLotSchema = new mongoose.Schema(
       village: String,
     },
 
-    images: [
-      {
-        type: String,
-      },
-    ],
-
-    // Physical supply available for sale.
-    // Future/planned production will use SupplyIntent instead.
-    supplyType: {
-      type: String,
-      enum: ["spot"],
-      default: "spot",
-    },
-
-    // Optional aggregation/facilitation information.
     aggregatorType: {
       type: String,
       enum: ["direct", "fpo", "arthiya"],
@@ -78,20 +59,13 @@ const produceLotSchema = new mongoose.Schema(
       default: null,
     },
 
-    availableFrom: {
-      type: Date,
-      default: Date.now,
-    },
-
     status: {
       type: String,
       enum: [
         "draft",
         "available",
-        "in_auction",
-        "reserved",
         "committed",
-        "sold",
+        "converted",
         "cancelled",
       ],
       default: "draft",
@@ -103,6 +77,6 @@ const produceLotSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model(
-  "ProduceLot",
-  produceLotSchema
+  "SupplyIntent",
+  supplyIntentSchema
 );

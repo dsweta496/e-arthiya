@@ -14,6 +14,9 @@ const createLot = async (req, res) => {
       qualityGrade,
       location,
       images,
+      aggregatorType,
+      aggregator,
+      availableFrom,
     } = req.body;
 
     if (!farmer || !crop || !quantity || !unit) {
@@ -40,6 +43,32 @@ const createLot = async (req, res) => {
       });
     }
 
+    // If an FPO/Arthiya is facilitating the lot,
+    // verify that the referenced user has the correct role.
+    if (aggregator) {
+      const aggregatorUser =
+        await User.findById(aggregator);
+
+      if (!aggregatorUser) {
+        return res.status(404).json({
+          success: false,
+          message: "Aggregator not found",
+        });
+      }
+
+      if (
+        !["fpo", "arthiya"].includes(
+          aggregatorUser.role
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Aggregator must be an FPO or Arthiya",
+        });
+      }
+    }
+
     const lot = await ProduceLot.create({
       farmer,
       crop,
@@ -51,6 +80,17 @@ const createLot = async (req, res) => {
       qualityGrade,
       location,
       images,
+
+      supplyType: "spot",
+
+      aggregatorType:
+        aggregatorType || "direct",
+
+      aggregator:
+        aggregator || null,
+
+      availableFrom:
+        availableFrom || Date.now(),
     });
 
     res.status(201).json({
@@ -133,6 +173,9 @@ const updateLot = async (req, res) => {
       "location",
       "images",
       "status",
+      "aggregatorType",
+      "aggregator",
+      "availableFrom",
     ];
 
     const updates = {};

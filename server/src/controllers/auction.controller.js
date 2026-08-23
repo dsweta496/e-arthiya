@@ -1,5 +1,6 @@
 const Auction = require("../models/Auction");
 const ProduceLot = require("../models/ProduceLot");
+const Bid = require("../models/Bid");
 
 const createAuction = async (req, res) => {
   try {
@@ -31,8 +32,11 @@ const createAuction = async (req, res) => {
         message: "Produce lot not found",
       });
     }
-
-    if (lotData.status === "committed" || lotData.status === "sold") {
+    if (
+      ["reserved", "committed", "sold"].includes(
+        lotData.status
+      )
+    ) {
       return res.status(400).json({
         success: false,
         message: "This lot is no longer available",
@@ -201,10 +205,33 @@ const closeAuction = async (req, res) => {
 
     await auction.save();
 
+    if (result === "platform_winner") {
+      await Bid.updateMany(
+        {
+          auction: auction._id,
+          _id: { $ne: auction.highestBid },
+          status: "active",
+        },
+        {
+          status: "rejected",
+        }
+      );
+    } else {
+      await Bid.updateMany(
+        {
+          auction: auction._id,
+          status: { $in: ["active", "winning"] },
+        },
+        {
+          status: "rejected",
+        }
+      );
+    }
+
     await ProduceLot.findByIdAndUpdate(
       auction.lot,
       {
-        status: "committed",
+        status: "reserved",
       }
     );
 

@@ -50,7 +50,19 @@ const createCommitment = async (req, res) => {
       });
     }
 
+    if (!auction.lot) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Auction must be linked to a valid produce lot",
+      });
+    }
+
     let commitmentData;
+
+    // -----------------------------------------
+    // PLATFORM WINNER
+    // -----------------------------------------
 
     if (
       auction.status ===
@@ -70,12 +82,30 @@ const createCommitment = async (req, res) => {
       commitmentData = {
         auction: auction._id,
         lot: auction.lot._id,
+
         source: "platform_bid",
+
         buyer: bid.buyer,
+
         agreedPrice: bid.amount,
+
         quantity: auction.lot.quantity,
+
+        unit: auction.lot.unit,
+
+        depositPercentage: 50,
+
+        depositAmount:
+          (bid.amount * auction.lot.quantity * 50) /
+          100,
+
+        status: "created",
       };
     }
+
+    // -----------------------------------------
+    // EXTERNAL OFFER
+    // -----------------------------------------
 
     if (
       auction.status ===
@@ -89,21 +119,40 @@ const createCommitment = async (req, res) => {
       if (!offer) {
         return res.status(404).json({
           success: false,
-          message: "Selected external offer not found",
+          message:
+            "Selected external offer not found",
         });
       }
 
       commitmentData = {
         auction: auction._id,
         lot: auction.lot._id,
+
         source: "external_offer",
+
         externalBuyerName:
           offer.buyerName,
+
         externalBuyerPhone:
           offer.buyerPhone,
+
         agreedPrice:
           offer.offeredAmount,
+
         quantity: auction.lot.quantity,
+
+        unit: auction.lot.unit,
+
+        depositPercentage: 50,
+
+        depositAmount:
+          (
+            offer.offeredAmount *
+            auction.lot.quantity *
+            50
+          ) / 100,
+
+        status: "created",
       };
 
       offer.status = "selected";
@@ -147,7 +196,10 @@ const getCommitmentById = async (
       )
         .populate("lot")
         .populate("buyer", "name phone")
-        .populate("auction");
+        .populate("auction")
+        .populate("supplyIntent")
+        .populate("supplyPool")
+        .populate("procurementRequest");
 
     if (!commitment) {
       return res.status(404).json({
@@ -169,7 +221,10 @@ const getCommitmentById = async (
   }
 };
 
-const getCommitments = async (req, res) => {
+const getCommitments = async (
+  req,
+  res
+) => {
   try {
     const filter = {};
 
@@ -185,6 +240,10 @@ const getCommitments = async (req, res) => {
       await PurchaseCommitment.find(filter)
         .populate("lot")
         .populate("buyer", "name phone")
+        .populate("auction")
+        .populate("supplyIntent")
+        .populate("supplyPool")
+        .populate("procurementRequest")
         .sort({ createdAt: -1 });
 
     res.status(200).json({
