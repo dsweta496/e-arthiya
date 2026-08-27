@@ -10,6 +10,8 @@ const userRoutes = require("./routes/user.routes");
 const lotRoutes = require("./routes/lot.routes");
 const auctionRoutes = require("./routes/auction.routes");
 const commitmentRoutes = require("./routes/commitment.routes");
+const supplyIntentRoutes = require("./routes/supplyIntent.route");
+const procurementRequestRoutes = require("./routes/procurementRequest.route");
 
 const app = express();
 
@@ -22,6 +24,14 @@ app.use("/api/auctions", auctionRoutes);
 app.use(
   "/api/commitments",
   commitmentRoutes
+);
+app.use(
+  "/api/supply-intents",
+  supplyIntentRoutes
+);
+app.use(
+  "/api/procurement-requests",
+  procurementRequestRoutes
 );
 
 app.get("/api/health", (req, res) => {

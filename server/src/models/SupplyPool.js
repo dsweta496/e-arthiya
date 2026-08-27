@@ -64,10 +64,20 @@ const supplyPoolSchema = new mongoose.Schema(
       default: null,
     },
 
-    procurementRequest: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ProcurementRequest",
-      default: null,
+    procurementRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProcurementRequest",
+      },
+    ],
+    availabilityFrom: {
+      type: Date,
+      required: true,
+    },
+
+    availabilityUntil: {
+      type: Date,
+      required: true,
     },
 
     status: {

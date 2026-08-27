@@ -36,6 +36,11 @@ const procurementRequestSchema = new mongoose.Schema(
       required: true,
     },
 
+    availabilityFrom: {
+      type: Date,
+      required: true,
+    },
+
     qualityRequirement: {
       type: String,
       trim: true,

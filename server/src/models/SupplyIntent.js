@@ -36,6 +36,12 @@ const supplyIntentSchema = new mongoose.Schema(
       required: true,
     },
 
+    supplyType: {
+      type: String,
+      enum: ["spot", "preorder"],
+      required: true,
+    },
+
     qualityExpectation: {
       type: String,
       trim: true,
