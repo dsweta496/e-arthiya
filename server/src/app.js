@@ -12,6 +12,7 @@ const auctionRoutes = require("./routes/auction.routes");
 const commitmentRoutes = require("./routes/commitment.routes");
 const supplyIntentRoutes = require("./routes/supplyIntent.route");
 const procurementRequestRoutes = require("./routes/procurementRequest.route");
+const supplyPoolRoutes = require("./routes/supplyPool.route");
 
 const app = express();
 
@@ -40,5 +41,7 @@ app.get("/api/health", (req, res) => {
     message: "e-Arthiya API is running",
   });
 });
+
+app.use("/api/supply-pools", supplyPoolRoutes);
 
 module.exports = app;
