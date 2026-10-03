@@ -1,6 +1,7 @@
 const Auction = require("../models/Auction");
 const ProduceLot = require("../models/ProduceLot");
 const Bid = require("../models/Bid");
+const { getAvailableQuantity } = require("../services/allocation.service");
 
 const createAuction = async (req, res) => {
   try {
@@ -40,6 +41,15 @@ const createAuction = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "This lot is no longer available",
+      });
+    }
+
+    const availability = await getAvailableQuantity("lot", lot);
+
+    if (availability.availableQuantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "This lot has no unallocated quantity available for auction",
       });
     }
 

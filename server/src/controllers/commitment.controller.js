@@ -45,8 +45,7 @@ const createCommitment = async (req, res) => {
     if (existingCommitment) {
       return res.status(409).json({
         success: false,
-        message:
-          "Purchase commitment already exists",
+        message: "Purchase commitment already exists",
       });
     }
 
@@ -79,6 +78,19 @@ const createCommitment = async (req, res) => {
         });
       }
 
+      // Make sure the authenticated buyer
+      // is actually the winning bidder.
+      if (
+        bid.buyer.toString() !==
+        req.user._id.toString()
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Only the winning buyer can create this commitment",
+        });
+      }
+
       commitmentData = {
         auction: auction._id,
         lot: auction.lot._id,
@@ -96,10 +108,12 @@ const createCommitment = async (req, res) => {
         depositPercentage: 50,
 
         depositAmount:
-          (bid.amount * auction.lot.quantity * 50) /
+          (bid.amount *
+            auction.lot.quantity *
+            50) /
           100,
 
-        status: "created",
+        status: "pending_deposit",
       };
     }
 
@@ -146,13 +160,12 @@ const createCommitment = async (req, res) => {
         depositPercentage: 50,
 
         depositAmount:
-          (
-            offer.offeredAmount *
+          (offer.offeredAmount *
             auction.lot.quantity *
-            50
-          ) / 100,
+            50) /
+          100,
 
-        status: "created",
+        status: "pending_deposit",
       };
 
       offer.status = "selected";
@@ -164,17 +177,68 @@ const createCommitment = async (req, res) => {
         commitmentData
       );
 
-    await ProduceLot.findByIdAndUpdate(
-      auction.lot._id,
-      {
-        status: "committed",
-      }
-    );
-
     res.status(201).json({
       success: true,
       message:
         "Purchase commitment created successfully",
+      data: commitment,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+const cancelCommitment = async (req, res) => {
+  try {
+    const commitment = await PurchaseCommitment.findById(
+      req.params.id
+    );
+
+    if (!commitment) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase commitment not found",
+      });
+    }
+
+    // Only the buyer who owns the commitment
+    // can request cancellation.
+    if (
+      !commitment.buyer ||
+      commitment.buyer.toString() !==
+      req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only the buyer who owns this commitment can cancel it",
+      });
+    }
+
+    // Only confirmed commitments can currently
+    // enter the default/backout flow.
+    if (commitment.status !== "confirmed") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only a confirmed commitment can be cancelled",
+      });
+    }
+
+    commitment.status = "defaulted";
+    commitment.failureReason =
+      "Buyer cancelled after confirmation";
+    commitment.reroutingStatus = "pending";
+
+    await commitment.save();
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Commitment cancelled and marked for rerouting",
       data: commitment,
     });
   } catch (error) {
@@ -261,6 +325,7 @@ const getCommitments = async (
 
 module.exports = {
   createCommitment,
+  cancelCommitment,
   getCommitmentById,
   getCommitments,
 };

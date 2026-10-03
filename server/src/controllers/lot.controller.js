@@ -91,6 +91,8 @@ const createLot = async (req, res) => {
 
       availableFrom:
         availableFrom || Date.now(),
+
+      status: "available",
     });
 
     res.status(201).json({

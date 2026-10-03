@@ -14,7 +14,6 @@ const createProcurementRequest = async (
 ) => {
   try {
     const {
-      buyer,
       crop,
       variety,
       quantity,
@@ -26,12 +25,13 @@ const createProcurementRequest = async (
       demandType,
     } = req.body;
 
+    const buyer = req.user._id;
+
     // -----------------------------
     // REQUIRED FIELDS
     // -----------------------------
 
     if (
-      !buyer ||
       !crop ||
       !quantity ||
       !unit ||
@@ -250,7 +250,7 @@ const updateProcurementRequest = async (
       updates.availabilityFrom &&
       updates.requiredBy &&
       new Date(updates.availabilityFrom) >
-        new Date(updates.requiredBy)
+      new Date(updates.requiredBy)
     ) {
       return res.status(400).json({
         success: false,

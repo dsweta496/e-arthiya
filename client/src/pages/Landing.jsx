@@ -2,11 +2,15 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import heroImage from "../assets/hero-market.jpg";
 
-function Landing({ onEnter }) {
+function Landing({ user, onLogin, onEnter }) {
   const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-white text-arthiya-dark">
-      <Navbar onEnter={onEnter} />
+      <Navbar
+        user={user}
+        onLogin={onLogin}
+        onEnter={onEnter}
+      />
 
       {/* HERO */}
       <section className="relative overflow-visible border-b border-slate-200 bg-white">
@@ -65,7 +69,7 @@ function Landing({ onEnter }) {
 
             <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-white via-white/45 to-transparent" />
 
-            
+
           </div>
         </div>
 
@@ -134,12 +138,12 @@ function Landing({ onEnter }) {
           </div>
 
           <button
-            onClick={onEnter}
+            onClick={() => navigate("/marketplace")}
             className="w-fit shrink-0 rounded-full bg-white px-5 py-3 text-sm font-semibold text-arthiya-green transition hover:-translate-y-0.5 hover:bg-arthiya-light-sage"
           >
-            Enter Marketplace →
+            Get Started →
           </button>
-          
+
         </div>
       </section>
     </div>

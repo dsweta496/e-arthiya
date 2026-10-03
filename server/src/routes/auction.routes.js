@@ -22,35 +22,81 @@ const {
   createCommitment,
 } = require("../controllers/commitment.controller");
 
+const {
+  protect,
+  authorizeRoles,
+} = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
-router.post("/", createAuction);
+// Auction
+router.post(
+  "/",
+  protect,
+  authorizeRoles("farmer", "fpo", "arthiya"),
+  createAuction
+);
 
-router.get("/", getAuctions);
+router.get(
+  "/",
+  protect,
+  getAuctions
+);
 
-router.get("/:id", getAuctionById);
-
-router.post("/:id/close", closeAuction);
-
-router.post("/:id/bids", createBid);
-
-router.get("/:id/bids", getAuctionBids);
+router.get(
+  "/:id",
+  protect,
+  getAuctionById
+);
 
 router.post(
+  "/:id/close",
+  protect,
+  authorizeRoles("farmer", "fpo", "arthiya"),
+  closeAuction
+);
+
+// Bids — Buyer
+router.post(
+  "/:id/bids",
+  protect,
+  authorizeRoles("buyer"),
+  createBid
+);
+
+router.get(
+  "/:id/bids",
+  protect,
+  getAuctionBids
+);
+
+// External offers — Farmer
+router.post(
   "/:id/external-offers",
+  protect,
+  authorizeRoles("farmer"),
   createExternalOffer
 );
 
 router.get(
   "/:id/external-offers",
+  protect,
   getExternalOffers
 );
 
 router.post(
   "/:id/external-offers/:offerId/select",
+  protect,
+  authorizeRoles("farmer"),
   selectExternalOffer
 );
 
-router.post("/:id/commit", createCommitment);
+// Commitment
+router.post(
+  "/:id/commit",
+  protect,
+  authorizeRoles("buyer"),
+  createCommitment
+);
 
 module.exports = router;

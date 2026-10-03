@@ -7,16 +7,40 @@ const {
   updateVerificationStatus,
 } = require("../controllers/user.controller");
 
+const {
+  protect,
+  authorizeRoles,
+} = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
-router.post("/", createUser);
+// Keep existing user creation endpoint.
+// Public signup should use /api/auth/signup.
+router.post(
+  "/",
+  createUser
+);
 
-router.get("/:id", getUserById);
+// Authenticated user lookup
+router.get(
+  "/:id",
+  protect,
+  getUserById
+);
 
-router.patch("/:id", updateUser);
+// Authenticated user update
+router.patch(
+  "/:id",
+  protect,
+  updateUser
+);
 
+// Verification status should be restricted.
+// Admin verification logic will be hardened further later.
 router.patch(
   "/:id/verification",
+  protect,
+  authorizeRoles("admin"),
   updateVerificationStatus
 );
 

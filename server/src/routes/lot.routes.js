@@ -7,14 +7,40 @@ const {
   updateLot,
 } = require("../controllers/lot.controller");
 
+const {
+  protect,
+  authorizeRoles,
+} = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
-router.post("/", createLot);
+// Farmer / FPO / Arthiya can create lots
+router.post(
+  "/",
+  protect,
+  authorizeRoles("farmer", "fpo", "arthiya"),
+  createLot
+);
 
-router.get("/", getLots);
+// Authenticated users can view lots
+router.get(
+  "/",
+  protect,
+  getLots
+);
 
-router.get("/:id", getLotById);
+router.get(
+  "/:id",
+  protect,
+  getLotById
+);
 
-router.patch("/:id", updateLot);
+// Owner/role validation remains in controller for now
+router.patch(
+  "/:id",
+  protect,
+  authorizeRoles("farmer", "fpo", "arthiya"),
+  updateLot
+);
 
 module.exports = router;

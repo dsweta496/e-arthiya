@@ -7,14 +7,40 @@ const {
   updateProcurementRequest,
 } = require("../controllers/procurementRequest.controller");
 
+const {
+  protect,
+  authorizeRoles,
+} = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
-router.post("/", createProcurementRequest);
+// Buyer creates demand
+router.post(
+  "/",
+  protect,
+  authorizeRoles("buyer"),
+  createProcurementRequest
+);
 
-router.get("/", getProcurementRequests);
+// Authenticated users can view demands
+router.get(
+  "/",
+  protect,
+  getProcurementRequests
+);
 
-router.get("/:id", getProcurementRequestById);
+router.get(
+  "/:id",
+  protect,
+  getProcurementRequestById
+);
 
-router.patch("/:id", updateProcurementRequest);
+// Buyer updates their demand
+router.patch(
+  "/:id",
+  protect,
+  authorizeRoles("buyer"),
+  updateProcurementRequest
+);
 
 module.exports = router;

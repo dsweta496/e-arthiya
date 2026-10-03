@@ -6,12 +6,30 @@ const {
   getSupplyPoolById,
 } = require("../controllers/supplyPool.controller");
 
+const {
+  protect,
+  authorizeRoles,
+} = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
-router.post("/", createSupplyPool);
+router.post(
+  "/",
+  protect,
+  authorizeRoles("fpo", "arthiya"),
+  createSupplyPool
+);
 
-router.get("/", getSupplyPools);
+router.get(
+  "/",
+  protect,
+  getSupplyPools
+);
 
-router.get("/:id", getSupplyPoolById);
+router.get(
+  "/:id",
+  protect,
+  getSupplyPoolById
+);
 
 module.exports = router;

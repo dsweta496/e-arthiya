@@ -7,14 +7,41 @@ const {
   updateSupplyIntent,
 } = require("../controllers/supplyIntent.controller");
 
+const {
+  protect,
+  authorizeRoles,
+} = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
-router.post("/", createSupplyIntent);
+// Create supply intent — Farmer only
+router.post(
+  "/",
+  protect,
+  authorizeRoles("farmer"),
+  createSupplyIntent
+);
 
-router.get("/", getSupplyIntents);
+// Get supply intents — Any authenticated user
+router.get(
+  "/",
+  protect,
+  getSupplyIntents
+);
 
-router.get("/:id", getSupplyIntentById);
+// Get single supply intent — Any authenticated user
+router.get(
+  "/:id",
+  protect,
+  getSupplyIntentById
+);
 
-router.patch("/:id", updateSupplyIntent);
+// Update supply intent — Farmer only
+router.patch(
+  "/:id",
+  protect,
+  authorizeRoles("farmer"),
+  updateSupplyIntent
+);
 
 module.exports = router;

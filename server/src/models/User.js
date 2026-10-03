@@ -17,15 +17,15 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    passwordHash: {
+      type: String,
+      required: true,
+      select: false,
+    },
+
     role: {
       type: String,
-      enum: [
-        "farmer",
-        "buyer",
-        "fpo",
-        "arthiya",
-        "admin"
-      ],
+      enum: ["farmer", "buyer", "fpo", "arthiya", "admin"],
       required: true,
     },
 
