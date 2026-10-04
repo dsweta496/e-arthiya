@@ -1,4 +1,5 @@
 const Allocation = require("../models/Allocation");
+const ProcurementRequest = require("../models/ProcurementRequest");
 const {
   createAllocation,
   releaseAllocation,
@@ -7,17 +8,32 @@ const {
   getAvailableQuantity,
 } = require("../services/allocation.service");
 
-// Create allocation
+async function assertBuyerOwnsRequest(req, procurementRequestId) {
+  if (req.user.role !== "buyer") return null;
+  const request = await ProcurementRequest.findById(procurementRequestId).select("buyer");
+  if (!request) throw new Error("Procurement request not found");
+  if (request.buyer.toString() !== req.user._id.toString()) {
+    const error = new Error("You are not authorized to use this procurement request");
+    error.statusCode = 403;
+    throw error;
+  }
+  return request;
+}
+
+async function assertBuyerOwnsAllocation(req, allocation) {
+  if (req.user.role !== "buyer") return;
+  const request = await ProcurementRequest.findById(allocation.procurementRequest).select("buyer");
+  if (!request || request.buyer.toString() !== req.user._id.toString()) {
+    const error = new Error("You are not authorized to modify this allocation");
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
 const createAllocationController = async (req, res) => {
   try {
-    const {
-      procurementRequestId,
-      farmerId,
-      sourceType,
-      sourceId,
-      quantity,
-      unit,
-    } = req.body;
+    const { procurementRequestId, farmerId, sourceType, sourceId, quantity, unit } = req.body;
+    await assertBuyerOwnsRequest(req, procurementRequestId);
 
     const allocation = await createAllocation({
       procurementRequestId,
@@ -28,122 +44,57 @@ const createAllocationController = async (req, res) => {
       unit,
     });
 
-    return res.status(201).json({
-      message: "Allocation created successfully",
-      allocation,
-    });
+    return res.status(201).json({ message: "Allocation created successfully", allocation });
   } catch (error) {
-    console.error("Create allocation error:", error);
-
-    return res.status(400).json({
-      message: error.message,
-    });
+    return res.status(error.statusCode || 400).json({ message: error.message });
   }
 };
 
-// Get allocations
 const getAllocations = async (req, res) => {
   try {
-    const {
-      procurementRequest,
-      farmer,
-      sourceType,
-      sourceId,
-      status,
-    } = req.query;
-
     const filter = {};
 
-    if (procurementRequest) {
-      filter.procurementRequest = procurementRequest;
+    if (req.user.role === "buyer") {
+      const ownRequests = await ProcurementRequest.find({ buyer: req.user._id }).select("_id");
+      filter.procurementRequest = { $in: ownRequests.map((item) => item._id) };
+    } else if (req.query.procurementRequest) {
+      filter.procurementRequest = req.query.procurementRequest;
     }
 
-    if (farmer) {
-      filter.farmer = farmer;
-    }
-
-    if (sourceType) {
-      filter.sourceType = sourceType;
-    }
-
-    if (sourceId) {
-      filter.sourceId = sourceId;
-    }
-
-    if (status) {
-      filter.status = status;
-    }
+    if (req.query.farmer) filter.farmer = req.query.farmer;
+    if (req.query.sourceType) filter.sourceType = req.query.sourceType;
+    if (req.query.sourceId) filter.sourceId = req.query.sourceId;
+    if (req.query.status) filter.status = req.query.status;
 
     const allocations = await Allocation.find(filter)
-      .populate(
-        "procurementRequest",
-        "crop variety quantity unit requiredBy availabilityFrom"
-      )
-      .populate(
-        "farmer",
-        "name phone role location"
-      )
+      .populate("procurementRequest", "crop variety quantity unit requiredBy availabilityFrom buyer")
+      .populate("farmer", "name phone role location")
       .sort({ createdAt: -1 });
 
-    return res.status(200).json({
-      count: allocations.length,
-      allocations,
-    });
+    return res.status(200).json({ count: allocations.length, allocations });
   } catch (error) {
-    console.error("Get allocations error:", error);
-
-    return res.status(500).json({
-      message: "Failed to fetch allocations",
-      error: error.message,
-    });
+    return res.status(500).json({ message: "Failed to fetch allocations", error: error.message });
   }
 };
 
-// Get allocation by ID
 const getAllocationById = async (req, res) => {
   try {
-    const allocation = await Allocation.findById(
-      req.params.id
-    )
-      .populate(
-        "procurementRequest",
-        "crop variety quantity unit requiredBy availabilityFrom"
-      )
-      .populate(
-        "farmer",
-        "name phone role location"
-      );
+    const allocation = await Allocation.findById(req.params.id)
+      .populate("procurementRequest", "crop variety quantity unit requiredBy availabilityFrom buyer")
+      .populate("farmer", "name phone role location");
 
-    if (!allocation) {
-      return res.status(404).json({
-        message: "Allocation not found",
-      });
-    }
-
+    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
+    await assertBuyerOwnsAllocation(req, allocation);
     return res.status(200).json(allocation);
   } catch (error) {
-    console.error("Get allocation error:", error);
-
-    return res.status(500).json({
-      message: "Failed to fetch allocation",
-      error: error.message,
-    });
+    return res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 
-// Get available quantity from a source
-const getAvailableQuantityController = async (
-  req,
-  res
-) => {
+const getAvailableQuantityController = async (req, res) => {
   try {
     const { sourceType, sourceId } = req.params;
-
-    const result = await getAvailableQuantity(
-      sourceType,
-      sourceId
-    );
-
+    const result = await getAvailableQuantity(sourceType, sourceId);
     return res.status(200).json({
       sourceType,
       sourceId,
@@ -153,89 +104,43 @@ const getAvailableQuantityController = async (
       unit: result.unit,
     });
   } catch (error) {
-    console.error(
-      "Get available quantity error:",
-      error
-    );
-
-    return res.status(400).json({
-      message: error.message,
-    });
+    return res.status(400).json({ message: error.message });
   }
 };
 
-// Release allocation
-const releaseAllocationController = async (
-  req,
-  res
-) => {
+const releaseAllocationController = async (req, res) => {
   try {
-    const allocation =
-      await releaseAllocation(req.params.id);
-
-    return res.status(200).json({
-      message: "Allocation released successfully",
-      allocation,
-    });
+    const allocation = await Allocation.findById(req.params.id);
+    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
+    await assertBuyerOwnsAllocation(req, allocation);
+    const updated = await releaseAllocation(req.params.id);
+    return res.status(200).json({ message: "Allocation released successfully", allocation: updated });
   } catch (error) {
-    console.error(
-      "Release allocation error:",
-      error
-    );
-
-    return res.status(400).json({
-      message: error.message,
-    });
+    return res.status(error.statusCode || 400).json({ message: error.message });
   }
 };
 
-// Commit allocation
-const commitAllocationController = async (
-  req,
-  res
-) => {
+const commitAllocationController = async (req, res) => {
   try {
-    const allocation =
-      await commitAllocation(req.params.id);
-
-    return res.status(200).json({
-      message: "Allocation committed successfully",
-      allocation,
-    });
+    const allocation = await Allocation.findById(req.params.id);
+    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
+    await assertBuyerOwnsAllocation(req, allocation);
+    const updated = await commitAllocation(req.params.id);
+    return res.status(200).json({ message: "Allocation committed successfully", allocation: updated });
   } catch (error) {
-    console.error(
-      "Commit allocation error:",
-      error
-    );
-
-    return res.status(400).json({
-      message: error.message,
-    });
+    return res.status(error.statusCode || 400).json({ message: error.message });
   }
 };
 
-// Fulfill allocation
-const fulfillAllocationController = async (
-  req,
-  res
-) => {
+const fulfillAllocationController = async (req, res) => {
   try {
-    const allocation =
-      await fulfillAllocation(req.params.id);
-
-    return res.status(200).json({
-      message: "Allocation fulfilled successfully",
-      allocation,
-    });
+    const allocation = await Allocation.findById(req.params.id);
+    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
+    await assertBuyerOwnsAllocation(req, allocation);
+    const updated = await fulfillAllocation(req.params.id);
+    return res.status(200).json({ message: "Allocation fulfilled successfully", allocation: updated });
   } catch (error) {
-    console.error(
-      "Fulfill allocation error:",
-      error
-    );
-
-    return res.status(400).json({
-      message: error.message,
-    });
+    return res.status(error.statusCode || 400).json({ message: error.message });
   }
 };
 

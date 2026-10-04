@@ -3,27 +3,19 @@ const User = require("../models/User");
 
 const createUser = async (req, res) => {
   try {
-    const {
-      name,
-      phone,
-      password,
-      role,
-      location,
-    } = req.body;
+    const { name, phone, password, role, location } = req.body;
 
     if (!name || !phone || !password || !role) {
       return res.status(400).json({
         success: false,
-        message:
-          "Name, phone, password and role are required",
+        message: "Name, phone, password and role are required",
       });
     }
 
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
-        message:
-          "Password must be at least 6 characters long",
+        message: "Password must be at least 6 characters long",
       });
     }
 
@@ -32,8 +24,7 @@ const createUser = async (req, res) => {
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message:
-          "A user with this phone number already exists",
+        message: "A user with this phone number already exists",
       });
     }
 
@@ -60,9 +51,44 @@ const createUser = async (req, res) => {
   }
 };
 
+const getUsers = async (req, res) => {
+  try {
+    const filter = {};
+
+    if (req.query.role) {
+      filter.role = req.query.role;
+    }
+
+    if (req.query.verificationStatus) {
+      filter.verificationStatus = req.query.verificationStatus;
+    }
+
+    if (req.query.isActive !== undefined) {
+      filter.isActive = req.query.isActive === "true";
+    }
+
+    const users = await User.find(filter)
+      .select("name phone role verificationStatus location isActive createdAt")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).select(
+      "name phone role verificationStatus location isActive createdAt"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -85,12 +111,14 @@ const getUserById = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    const allowedUpdates = [
-      "name",
-      "location",
-      "isActive",
-    ];
+    if (req.user._id.toString() !== req.params.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only update your own account",
+      });
+    }
 
+    const allowedUpdates = ["name", "location", "isActive"];
     const updates = {};
 
     allowedUpdates.forEach((field) => {
@@ -99,14 +127,10 @@ const updateUser = async (req, res) => {
       }
     });
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    const user = await User.findByIdAndUpdate(req.params.id, updates, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!user) {
       return res.status(404).json({
@@ -132,11 +156,7 @@ const updateVerificationStatus = async (req, res) => {
   try {
     const { verificationStatus } = req.body;
 
-    if (
-      !["pending", "verified", "rejected"].includes(
-        verificationStatus
-      )
-    ) {
+    if (!["pending", "verified", "rejected"].includes(verificationStatus)) {
       return res.status(400).json({
         success: false,
         message: "Invalid verification status",
@@ -146,10 +166,7 @@ const updateVerificationStatus = async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { verificationStatus },
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     );
 
     if (!user) {
@@ -174,6 +191,7 @@ const updateVerificationStatus = async (req, res) => {
 
 module.exports = {
   createUser,
+  getUsers,
   getUserById,
   updateUser,
   updateVerificationStatus,

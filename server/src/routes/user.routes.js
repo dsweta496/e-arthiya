@@ -2,6 +2,7 @@ const express = require("express");
 
 const {
   createUser,
+  getUsers,
   getUserById,
   updateUser,
   updateVerificationStatus,
@@ -14,29 +15,14 @@ const {
 
 const router = express.Router();
 
-// Keep existing user creation endpoint.
-// Public signup should use /api/auth/signup.
-router.post(
-  "/",
-  createUser
-);
+router.post("/", createUser);
 
-// Authenticated user lookup
-router.get(
-  "/:id",
-  protect,
-  getUserById
-);
+router.get("/", protect, getUsers);
 
-// Authenticated user update
-router.patch(
-  "/:id",
-  protect,
-  updateUser
-);
+router.get("/:id", protect, getUserById);
 
-// Verification status should be restricted.
-// Admin verification logic will be hardened further later.
+router.patch("/:id", protect, updateUser);
+
 router.patch(
   "/:id/verification",
   protect,

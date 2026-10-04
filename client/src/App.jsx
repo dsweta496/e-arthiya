@@ -18,9 +18,46 @@ import ArthiyaLayout from "./layouts/ArthiyaLayout";
 import FarmerDashboard from "./pages/farmer/FarmerDashboard";
 import FarmerSupply from "./pages/farmer/FarmerSupply";
 import FarmerAddSupply from "./pages/farmer/FarmerAddSupply";
+import FarmerMarketplace from "./pages/farmer/FarmerMarketplace";
+import FarmerDemand from "./pages/farmer/FarmerDemand";
+import FarmerOpportunities from "./pages/farmer/FarmerOpportunities";
+import FarmerAuctions from "./pages/farmer/FarmerAuctions";
+import FarmerCommitments from "./pages/farmer/FarmerCommitments";
+import FarmerPayments from "./pages/farmer/FarmerPayments";
+
 import BuyerDashboard from "./pages/buyer/BuyerDashboard";
-import FPODashboard from "./pages/fpo/FPODashboard";
+import BuyerMarketplace from "./pages/buyer/BuyerMarketplace";
+import BuyerSupply from "./pages/buyer/BuyerSupply";
+import BuyerRequirements from "./pages/buyer/BuyerRequirements";
+import BuyerRequirementAdd from "./pages/buyer/BuyerRequirementAdd";
+import BuyerMatches from "./pages/buyer/BuyerMatches";
+import BuyerAuctions from "./pages/buyer/BuyerAuctions";
+import BuyerBids from "./pages/buyer/BuyerBids";
+import BuyerCommitments from "./pages/buyer/BuyerCommitments";
+import BuyerPayments from "./pages/buyer/BuyerPayments";
+
 import ArthiyaDashboard from "./pages/arthiya/ArthiyaDashboard";
+import ArthiyaMarketplace from "./pages/arthiya/ArthiyaMarketplace";
+import ArthiyaFarmers from "./pages/arthiya/ArthiyaFarmers";
+import ArthiyaSupply from "./pages/arthiya/ArthiyaSupply";
+import ArthiyaDemand from "./pages/arthiya/ArthiyaDemand";
+import ArthiyaOpportunities from "./pages/arthiya/ArthiyaOpportunities";
+import ArthiyaPools from "./pages/arthiya/ArthiyaPools";
+import ArthiyaPoolCreate from "./pages/arthiya/ArthiyaPoolCreate";
+import ArthiyaAuctions from "./pages/arthiya/ArthiyaAuctions";
+import ArthiyaDeals from "./pages/arthiya/ArthiyaDeals";
+import ArthiyaSettlements from "./pages/arthiya/ArthiyaSettlements";
+
+import FPODashboard from "./pages/fpo/FPODashboard";
+import FPOFarmers from "./pages/fpo/FPOFarmers";
+import FPOSupply from "./pages/fpo/FPOSupply";
+import FPODemand from "./pages/fpo/FPODemand";
+import FPOPools from "./pages/fpo/FPOPools";
+import FPOPoolCreate from "./pages/fpo/FPOPoolCreate";
+import FPOMarketplace from "./pages/fpo/FPOMarketplace";
+import FPOCommitments from "./pages/fpo/FPOCommitments";
+import FPOSettlements from "./pages/fpo/FPOSettlements";
+
 
 import { getStoredUser } from "./api/authApi";
 
@@ -139,6 +176,60 @@ function App() {
         />
 
         <Route
+          path="/farmer/marketplace"
+          element={
+            <ProtectedRoute user={user} allowedRole="farmer">
+              <FarmerLayout user={user}><FarmerMarketplace user={user} /></FarmerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/farmer/demand"
+          element={
+            <ProtectedRoute user={user} allowedRole="farmer">
+              <FarmerLayout user={user}><FarmerDemand user={user} /></FarmerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/farmer/opportunities"
+          element={
+            <ProtectedRoute user={user} allowedRole="farmer">
+              <FarmerLayout user={user}><FarmerOpportunities user={user} /></FarmerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/farmer/auctions"
+          element={
+            <ProtectedRoute user={user} allowedRole="farmer">
+              <FarmerLayout user={user}><FarmerAuctions user={user} /></FarmerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/farmer/commitments"
+          element={
+            <ProtectedRoute user={user} allowedRole="farmer">
+              <FarmerLayout user={user}><FarmerCommitments user={user} /></FarmerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/farmer/payments"
+          element={
+            <ProtectedRoute user={user} allowedRole="farmer">
+              <FarmerLayout user={user}><FarmerPayments user={user} /></FarmerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/farmer/supply/add"
           element={
             <ProtectedRoute
@@ -169,6 +260,105 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/buyer/marketplace"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerMarketplace user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/supply"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerSupply user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/requirements"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerRequirements user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/requirements/add"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerRequirementAdd user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/matches"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerMatches user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/auctions"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerAuctions user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/bids"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerBids user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/commitments"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerCommitments user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/buyer/payments"
+          element={
+            <ProtectedRoute user={user} allowedRole="buyer">
+              <BuyerLayout user={user}>
+                <BuyerPayments user={user} />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+
 
         {/* =========================
             FPO
@@ -188,6 +378,88 @@ function App() {
           }
         />
 
+        <Route
+          path="/fpo"
+          element={
+            <FPOLayout user={user}>
+              <FPODashboard user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/farmers"
+          element={
+            <FPOLayout user={user}>
+              <FPOFarmers user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/supply"
+          element={
+            <FPOLayout user={user}>
+              <FPOSupply user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/demand"
+          element={
+            <FPOLayout user={user}>
+              <FPODemand user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/pools"
+          element={
+            <FPOLayout user={user}>
+              <FPOPools user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/pools/create"
+          element={
+            <FPOLayout user={user}>
+              <FPOPoolCreate user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/marketplace"
+          element={
+            <FPOLayout user={user}>
+              <FPOMarketplace user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/commitments"
+          element={
+            <FPOLayout user={user}>
+              <FPOCommitments user={user} />
+            </FPOLayout>
+          }
+        />
+
+        <Route
+          path="/fpo/settlements"
+          element={
+            <FPOLayout user={user}>
+              <FPOSettlements user={user} />
+            </FPOLayout>
+          }
+        />
+
+
         {/* =========================
             ARTHIYA
         ========================= */}
@@ -205,6 +477,78 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/arthiya"
+          element={
+            <ProtectedRoute user={user} allowedRole="arthiya">
+              <ArthiyaLayout user={user}>
+                <ArthiyaDashboard user={user} />
+              </ArthiyaLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/arthiya/marketplace" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaMarketplace user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/farmers" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaFarmers user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/supply" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaSupply user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/demand" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaDemand user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/opportunities" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaOpportunities user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/pools" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaPools user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/pools/create" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaPoolCreate user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/auctions" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaAuctions user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/deals" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaDeals user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/arthiya/settlements" element={
+          <ProtectedRoute user={user} allowedRole="arthiya">
+            <ArthiyaLayout user={user}><ArthiyaSettlements user={user} /></ArthiyaLayout>
+          </ProtectedRoute>
+        } />
+
 
         {/* =========================
             FALLBACK

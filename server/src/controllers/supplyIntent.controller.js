@@ -98,6 +98,13 @@ const createSupplyIntent = async (req, res) => {
     // CREATE INTENT
     // -----------------------------
 
+    if (req.user.role === "farmer" && req.user._id.toString() !== farmer.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only create future supply for your own farmer account",
+      });
+    }
+
     const supplyIntent =
       await SupplyIntent.create({
         farmer,
@@ -113,7 +120,7 @@ const createSupplyIntent = async (req, res) => {
           aggregatorType || "direct",
         aggregator:
           aggregator || null,
-        status: "draft",
+        status: "available",
       });
 
     res.status(201).json({
@@ -142,7 +149,9 @@ const getSupplyIntents = async (
   try {
     const filter = {};
 
-    if (req.query.farmer) {
+    if (req.user.role === "farmer") {
+      filter.farmer = req.user._id;
+    } else if (req.query.farmer) {
       filter.farmer = req.query.farmer;
     }
 
@@ -250,6 +259,7 @@ const updateSupplyIntent = async (
       "location",
       "aggregatorType",
       "aggregator",
+      "status",
     ];
 
     const updates = {};
@@ -267,6 +277,22 @@ const updateSupplyIntent = async (
       return res.status(400).json({
         success: false,
         message: "No valid fields to update",
+      });
+    }
+
+    const existingIntent = await SupplyIntent.findById(req.params.id);
+
+    if (!existingIntent) {
+      return res.status(404).json({
+        success: false,
+        message: "Supply intent not found",
+      });
+    }
+
+    if (req.user.role === "farmer" && existingIntent.farmer.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only update your own future supply",
       });
     }
 

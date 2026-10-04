@@ -69,6 +69,13 @@ const createLot = async (req, res) => {
       }
     }
 
+    if (req.user.role === "farmer" && req.user._id.toString() !== farmer.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only create supply for your own farmer account",
+      });
+    }
+
     const lot = await ProduceLot.create({
       farmer,
       crop,
@@ -112,7 +119,9 @@ const getLots = async (req, res) => {
   try {
     const filter = {};
 
-    if (req.query.farmer) {
+    if (req.user.role === "farmer" && req.query.marketplace !== "true") {
+      filter.farmer = req.user._id;
+    } else if (req.query.farmer) {
       filter.farmer = req.query.farmer;
     }
 
@@ -187,6 +196,22 @@ const updateLot = async (req, res) => {
         updates[field] = req.body[field];
       }
     });
+
+    const existingLot = await ProduceLot.findById(req.params.id);
+
+    if (!existingLot) {
+      return res.status(404).json({
+        success: false,
+        message: "Produce lot not found",
+      });
+    }
+
+    if (req.user.role === "farmer" && existingLot.farmer.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only update your own produce lots",
+      });
+    }
 
     const lot = await ProduceLot.findByIdAndUpdate(
       req.params.id,

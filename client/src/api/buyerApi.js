@@ -1,15 +1,34 @@
 import { apiRequest } from "./api";
 
-// ========================================
-// BUYER — REQUIREMENTS
-// ========================================
+function queryString(params = {}) {
+  const entries = Object.entries(params).filter(
+    ([, value]) => value !== undefined && value !== null && value !== ""
+  );
 
-export async function getBuyerRequirements(buyerId) {
-  const query = buyerId
-    ? `?buyer=${encodeURIComponent(buyerId)}`
-    : "";
+  if (!entries.length) return "";
 
-  return apiRequest(`/procurement-requests${query}`);
+  const search = new URLSearchParams();
+  entries.forEach(([key, value]) => search.set(key, value));
+  return `?${search.toString()}`;
+}
+
+function unwrap(response, keys = ["data", "matches", "allocations"]) {
+  for (const key of keys) {
+    if (response?.[key] !== undefined) return response[key];
+  }
+  return response;
+}
+
+// ============================================================
+// REQUIREMENTS / DEMAND
+// ============================================================
+
+export async function getBuyerRequirements(params = {}) {
+  return apiRequest(`/procurement-requests${queryString(params)}`);
+}
+
+export async function getBuyerRequirement(requirementId) {
+  return apiRequest(`/procurement-requests/${requirementId}`);
 }
 
 export async function createBuyerRequirement(payload) {
@@ -19,110 +38,137 @@ export async function createBuyerRequirement(payload) {
   });
 }
 
-export async function updateBuyerRequirement(
-  requirementId,
-  payload
-) {
+export async function updateBuyerRequirement(requirementId, payload) {
   return apiRequest(`/procurement-requests/${requirementId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
-// ========================================
-// BUYER — MATCHING
-// ========================================
-
-export async function getBuyerMatches(procurementRequestId) {
-  return apiRequest(
-    `/matching/${procurementRequestId}`
-  );
+export async function cancelBuyerRequirement(requirementId) {
+  return updateBuyerRequirement(requirementId, {
+    status: "cancelled",
+  });
 }
 
-export async function runBuyerMatching(
-  procurementRequestId
-) {
-  return apiRequest(
-    `/matching/${procurementRequestId}/run`,
-    {
-      method: "POST",
-    }
-  );
+// ============================================================
+// AVAILABLE SUPPLY
+// ============================================================
+
+export async function getBuyerSupply(params = {}) {
+  return apiRequest(`/lots${queryString({ status: "available", ...params })}`);
 }
 
-// ========================================
-// BUYER — AUCTIONS
-// ========================================
+export async function getBuyerLot(lotId) {
+  return apiRequest(`/lots/${lotId}`);
+}
 
-export async function getBuyerAuctions() {
-  return apiRequest("/auctions");
+// ============================================================
+// MATCHING
+// ============================================================
+
+export async function getBuyerMatches(requirementId) {
+  return apiRequest(`/matching/${requirementId}`);
+}
+
+export async function runBuyerMatching(requirementId) {
+  return apiRequest(`/matching/${requirementId}/run`, {
+    method: "POST",
+  });
+}
+
+// ============================================================
+// AUCTIONS
+// ============================================================
+
+export async function getBuyerAuctions(params = {}) {
+  return apiRequest(`/auctions${queryString(params)}`);
 }
 
 export async function getBuyerAuction(auctionId) {
   return apiRequest(`/auctions/${auctionId}`);
 }
 
-// ========================================
-// BUYER — BIDS
-// ========================================
-
-export async function placeBid(auctionId, payload) {
-  return apiRequest(
-    `/auctions/${auctionId}/bids`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
+export async function placeBid(auctionId, amount) {
+  return apiRequest(`/auctions/${auctionId}/bids`, {
+    method: "POST",
+    body: JSON.stringify({ amount }),
+  });
 }
 
 export async function getAuctionBids(auctionId) {
-  return apiRequest(
-    `/auctions/${auctionId}/bids`
-  );
+  return apiRequest(`/auctions/${auctionId}/bids`);
 }
 
-// ========================================
-// BUYER — COMMITMENTS
-// ========================================
+export async function commitWinningAuction(auctionId) {
+  return apiRequest(`/auctions/${auctionId}/commit`, {
+    method: "POST",
+  });
+}
 
-export async function getBuyerCommitments() {
-  return apiRequest("/commitments");
+// ============================================================
+// COMMITMENTS
+// ============================================================
+
+export async function getBuyerCommitments(params = {}) {
+  return apiRequest(`/commitments${queryString(params)}`);
 }
 
 export async function getBuyerCommitment(commitmentId) {
   return apiRequest(`/commitments/${commitmentId}`);
 }
 
-export async function cancelBuyerCommitment(
-  commitmentId
-) {
-  return apiRequest(
-    `/commitments/${commitmentId}/cancel`,
-    {
-      method: "POST",
-    }
-  );
+export async function cancelBuyerCommitment(commitmentId) {
+  return apiRequest(`/commitments/${commitmentId}/cancel`, {
+    method: "POST",
+  });
 }
 
-// ========================================
-// BUYER — PAYMENTS
-// ========================================
+// ============================================================
+// PAYMENTS
+// ============================================================
 
-export async function paySecurityDeposit(
-  commitmentId
-) {
-  return apiRequest(
-    `/payments/commitments/${commitmentId}/deposit`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        paymentMethod: "demo",
-      }),
-    }
-  );
+export async function paySecurityDeposit(commitmentId) {
+  return apiRequest(`/payments/commitments/${commitmentId}/deposit`, {
+    method: "POST",
+    body: JSON.stringify({ paymentMethod: "demo" }),
+  });
 }
 
-export async function getBuyerPayments() {
-  return apiRequest("/payments");
+export async function getBuyerPayments(params = {}) {
+  return apiRequest(`/payments${queryString(params)}`);
 }
+
+export async function getBuyerPayment(paymentId) {
+  return apiRequest(`/payments/${paymentId}`);
+}
+
+// ============================================================
+// ALLOCATIONS / MATCHED SUPPLY RESERVATIONS
+// ============================================================
+
+export async function getBuyerAllocations(params = {}) {
+  return apiRequest(`/allocations${queryString(params)}`);
+}
+
+export async function getBuyerAllocation(allocationId) {
+  return apiRequest(`/allocations/${allocationId}`);
+}
+
+export async function releaseBuyerAllocation(allocationId) {
+  return apiRequest(`/allocations/${allocationId}/release`, {
+    method: "PATCH",
+  });
+}
+
+export async function commitBuyerAllocation(allocationId) {
+  return apiRequest(`/allocations/${allocationId}/commit`, {
+    method: "PATCH",
+  });
+}
+
+export async function getBuyerSourceAvailability(sourceType, sourceId) {
+  return apiRequest(`/allocations/availability/${sourceType}/${sourceId}`);
+}
+
+export { unwrap };

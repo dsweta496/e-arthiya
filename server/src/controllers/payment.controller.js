@@ -184,24 +184,54 @@ const getPaymentById = async (req, res) => {
   }
 };
 
+
 const getPayments = async (req, res) => {
   try {
-    const filter = {
-      payer: req.user._id,
-    };
+    const query = {};
 
-    if (req.query.type) {
-      filter.type = req.query.type;
+    if (req.query.type) query.type = req.query.type;
+    if (req.query.status) query.status = req.query.status;
+
+    let payments = await PaymentTransaction.find(query)
+      .populate({
+        path: "commitment",
+        populate: [
+          { path: "buyer", select: "name phone" },
+          { path: "lot", populate: { path: "aggregator", select: "name phone role" } },
+          { path: "supplyPool", populate: { path: "aggregator", select: "name phone role" } },
+        ],
+      })
+      .sort({ createdAt: -1 });
+
+    if (req.user.role === "buyer") {
+      payments = payments.filter(
+        (item) =>
+          item.payer &&
+          item.payer.toString() === req.user._id.toString()
+      );
     }
 
-    if (req.query.status) {
-      filter.status = req.query.status;
+    if (req.user.role === "fpo" || req.user.role === "arthiya") {
+      payments = payments.filter((item) => {
+        const lotOwner =
+          item.commitment?.lot?.aggregator &&
+          item.commitment.lot.aggregator._id.toString() === req.user._id.toString();
+
+        const poolOwner =
+          item.commitment?.supplyPool?.aggregator &&
+          item.commitment.supplyPool.aggregator._id.toString() === req.user._id.toString();
+
+        return lotOwner || poolOwner;
+      });
     }
 
-    const payments =
-      await PaymentTransaction.find(filter)
-        .populate("commitment")
-        .sort({ createdAt: -1 });
+    if (req.user.role === "farmer") {
+      payments = payments.filter(
+        (item) =>
+          item.commitment?.lot?.farmer &&
+          item.commitment.lot.farmer.toString() === req.user._id.toString()
+      );
+    }
 
     return res.status(200).json({
       success: true,

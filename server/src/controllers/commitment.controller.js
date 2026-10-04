@@ -285,38 +285,71 @@ const getCommitmentById = async (
   }
 };
 
-const getCommitments = async (
-  req,
-  res
-) => {
+
+const getCommitments = async (req, res) => {
   try {
-    const filter = {};
+    const basePopulate = [
+      { path: "lot", populate: { path: "aggregator", select: "name phone role" } },
+      { path: "buyer", select: "name phone" },
+      { path: "auction" },
+      { path: "supplyIntent" },
+      { path: "supplyPool", populate: { path: "aggregator", select: "name phone role" } },
+      { path: "procurementRequest" },
+    ];
+
+    let commitments = await PurchaseCommitment.find({})
+      .populate(basePopulate)
+      .sort({ createdAt: -1 });
+
+    if (req.user.role === "buyer") {
+      commitments = commitments.filter(
+        (item) =>
+          item.buyer &&
+          item.buyer._id.toString() === req.user._id.toString()
+      );
+    }
+
+    if (req.user.role === "farmer") {
+      commitments = commitments.filter(
+        (item) =>
+          item.lot?.farmer?.toString() === req.user._id.toString() ||
+          item.supplyIntent?.farmer?.toString() === req.user._id.toString()
+      );
+    }
+
+    if (req.user.role === "fpo" || req.user.role === "arthiya") {
+      commitments = commitments.filter((item) => {
+        const lotOwned =
+          item.lot?.aggregator &&
+          item.lot.aggregator._id.toString() === req.user._id.toString();
+
+        const poolOwned =
+          item.supplyPool?.aggregator &&
+          item.supplyPool.aggregator._id.toString() === req.user._id.toString();
+
+        return lotOwned || poolOwned;
+      });
+    }
 
     if (req.query.status) {
-      filter.status = req.query.status;
+      commitments = commitments.filter(
+        (item) => item.status === req.query.status
+      );
     }
 
     if (req.query.source) {
-      filter.source = req.query.source;
+      commitments = commitments.filter(
+        (item) => item.source === req.query.source
+      );
     }
 
-    const commitments =
-      await PurchaseCommitment.find(filter)
-        .populate("lot")
-        .populate("buyer", "name phone")
-        .populate("auction")
-        .populate("supplyIntent")
-        .populate("supplyPool")
-        .populate("procurementRequest")
-        .sort({ createdAt: -1 });
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: commitments.length,
       data: commitments,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

@@ -3,25 +3,30 @@ const ProduceLot = require("../models/ProduceLot");
 const Bid = require("../models/Bid");
 const { getAvailableQuantity } = require("../services/allocation.service");
 
+function canManageLot(user, lot) {
+  if (!user || !lot) return false;
+  if (user.role === "admin") return true;
+  if (user.role === "farmer") {
+    return lot.farmer.toString() === user._id.toString();
+  }
+  if (["fpo", "arthiya"].includes(user.role)) {
+    return (
+      lot.aggregator &&
+      lot.aggregator.toString() === user._id.toString() &&
+      lot.aggregatorType === user.role
+    );
+  }
+  return false;
+}
+
 const createAuction = async (req, res) => {
   try {
-    const {
-      lot,
-      startTime,
-      endTime,
-      startingPrice,
-    } = req.body;
+    const { lot, startTime, endTime, startingPrice } = req.body;
 
-    if (
-      !lot ||
-      !startTime ||
-      !endTime ||
-      startingPrice === undefined
-    ) {
+    if (!lot || !startTime || !endTime || startingPrice === undefined) {
       return res.status(400).json({
         success: false,
-        message:
-          "Lot, start time, end time and starting price are required",
+        message: "Lot, start time, end time and starting price are required",
       });
     }
 
@@ -33,11 +38,15 @@ const createAuction = async (req, res) => {
         message: "Produce lot not found",
       });
     }
-    if (
-      ["reserved", "committed", "sold"].includes(
-        lotData.status
-      )
-    ) {
+
+    if (!canManageLot(req.user, lotData)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to auction this lot",
+      });
+    }
+
+    if (["reserved", "committed", "sold", "cancelled"].includes(lotData.status)) {
       return res.status(400).json({
         success: false,
         message: "This lot is no longer available",
@@ -65,6 +74,13 @@ const createAuction = async (req, res) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
 
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid auction dates",
+      });
+    }
+
     if (end <= start) {
       return res.status(400).json({
         success: false,
@@ -84,13 +100,13 @@ const createAuction = async (req, res) => {
     lotData.status = "in_auction";
     await lotData.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Auction created successfully",
       data: auction,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -101,8 +117,20 @@ const getAuctions = async (req, res) => {
   try {
     const filter = {};
 
-    if (req.query.status) {
-      filter.status = req.query.status;
+    if (req.query.status) filter.status = req.query.status;
+
+    if (["farmer", "fpo", "arthiya"].includes(req.user.role)) {
+      const lotFilter = {};
+
+      if (req.user.role === "farmer") {
+        lotFilter.farmer = req.user._id;
+      } else {
+        lotFilter.aggregator = req.user._id;
+        lotFilter.aggregatorType = req.user.role;
+      }
+
+      const managedLots = await ProduceLot.find(lotFilter).select("_id");
+      filter.lot = { $in: managedLots.map((item) => item._id) };
     }
 
     const auctions = await Auction.find(filter)
@@ -111,13 +139,13 @@ const getAuctions = async (req, res) => {
       .populate("selectedExternalOffer")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: auctions.length,
       data: auctions,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -126,9 +154,7 @@ const getAuctions = async (req, res) => {
 
 const getAuctionById = async (req, res) => {
   try {
-    const auction = await Auction.findById(
-      req.params.id
-    )
+    const auction = await Auction.findById(req.params.id)
       .populate("lot")
       .populate("highestBid")
       .populate("selectedExternalOffer");
@@ -140,12 +166,21 @@ const getAuctionById = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    if (["farmer", "fpo", "arthiya"].includes(req.user.role)) {
+      if (!canManageLot(req.user, auction.lot)) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to view this auction",
+        });
+      }
+    }
+
+    return res.status(200).json({
       success: true,
       data: auction,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -156,14 +191,19 @@ const closeAuction = async (req, res) => {
   try {
     const { result } = req.body;
 
-    const auction = await Auction.findById(
-      req.params.id
-    );
+    const auction = await Auction.findById(req.params.id).populate("lot");
 
     if (!auction) {
       return res.status(404).json({
         success: false,
         message: "Auction not found",
+      });
+    }
+
+    if (!canManageLot(req.user, auction.lot)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to close this auction",
       });
     }
 
@@ -174,32 +214,21 @@ const closeAuction = async (req, res) => {
       });
     }
 
-    if (
-      !["platform_winner", "external_offer"].includes(
-        result
-      )
-    ) {
+    if (!["platform_winner", "external_offer"].includes(result)) {
       return res.status(400).json({
         success: false,
-        message:
-          "Result must be platform_winner or external_offer",
+        message: "Result must be platform_winner or external_offer",
       });
     }
 
-    if (
-      result === "platform_winner" &&
-      !auction.highestBid
-    ) {
+    if (result === "platform_winner" && !auction.highestBid) {
       return res.status(400).json({
         success: false,
         message: "No platform bid exists",
       });
     }
 
-    if (
-      result === "external_offer" &&
-      !auction.selectedExternalOffer
-    ) {
+    if (result === "external_offer" && !auction.selectedExternalOffer) {
       return res.status(400).json({
         success: false,
         message: "No external offer has been selected",
@@ -210,7 +239,6 @@ const closeAuction = async (req, res) => {
       result === "platform_winner"
         ? "closed_platform_winner"
         : "closed_external_offer";
-
     auction.closedAt = new Date();
 
     await auction.save();
@@ -222,9 +250,7 @@ const closeAuction = async (req, res) => {
           _id: { $ne: auction.highestBid },
           status: "active",
         },
-        {
-          status: "rejected",
-        }
+        { status: "rejected" }
       );
     } else {
       await Bid.updateMany(
@@ -232,26 +258,21 @@ const closeAuction = async (req, res) => {
           auction: auction._id,
           status: { $in: ["active", "winning"] },
         },
-        {
-          status: "rejected",
-        }
+        { status: "rejected" }
       );
     }
 
-    await ProduceLot.findByIdAndUpdate(
-      auction.lot,
-      {
-        status: "reserved",
-      }
-    );
+    await ProduceLot.findByIdAndUpdate(auction.lot._id, {
+      status: "reserved",
+    });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Auction closed successfully",
       data: auction,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import LoginModal from "./auth/LoginModal";
 import navConfig from "./navigation/navConfig";
+import logo from "../assets/images.png";
 
 function Navbar({
   variant = "public",
@@ -75,9 +76,17 @@ function Navbar({
           to="/"
           className="flex items-center gap-2.5"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-900 text-sm font-bold text-white shadow-sm">
-            e
-          </span>
+          <img
+            src={logo}
+            alt="e-Arthiya"
+            className="
+      block
+      h-[40px]
+      w-auto
+      object-contain
+      object-left
+    "
+          />
 
           <span className="text-lg font-bold tracking-[-0.035em] text-emerald-950 sm:text-xl">
             e-Arthiya
