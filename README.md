@@ -1,6 +1,6 @@
 # 🌾 e-Arthiya
 
-![Landing Page](./docs/screenshots/landing.png)
+![Landing Page](./docs/screenshots/Landing.png)
 
 ### More Choices. Better Markets. Fairer Trade.
 
