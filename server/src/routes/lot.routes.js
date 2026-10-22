@@ -10,6 +10,7 @@ const {
 const {
   protect,
   authorizeRoles,
+  requireVerifiedOrganization,
 } = require("../middleware/auth.middleware");
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.post(
   "/",
   protect,
   authorizeRoles("farmer", "fpo", "arthiya"),
+  requireVerifiedOrganization,
   createLot
 );
 
@@ -40,7 +42,7 @@ router.patch(
   "/:id",
   protect,
   authorizeRoles("farmer", "fpo", "arthiya"),
+  requireVerifiedOrganization,
   updateLot
 );
-
 module.exports = router;

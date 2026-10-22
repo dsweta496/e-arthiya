@@ -140,18 +140,34 @@ const createDepositPayment = async (req, res) => {
   }
 };
 
+
 const getPaymentById = async (req, res) => {
   try {
-    const payment =
-      await PaymentTransaction.findById(
-        req.params.id
-      )
-        .populate(
-          "payer",
-          "name phone role"
-        )
-        .populate("receiver", "name phone role")
-        .populate("commitment");
+    const payment = await PaymentTransaction.findById(
+      req.params.id
+    )
+      .populate("payer", "name phone role")
+      .populate("receiver", "name phone role")
+      .populate({
+        path: "commitment",
+        populate: [
+          { path: "buyer", select: "name phone role" },
+          {
+            path: "lot",
+            populate: [
+              { path: "farmer", select: "name phone role" },
+              { path: "aggregator", select: "name phone role" },
+            ],
+          },
+          {
+            path: "supplyPool",
+            populate: {
+              path: "aggregator",
+              select: "name phone role",
+            },
+          },
+        ],
+      });
 
     if (!payment) {
       return res.status(404).json({
@@ -160,11 +176,24 @@ const getPaymentById = async (req, res) => {
       });
     }
 
-    if (
-      payment.payer &&
-      payment.payer._id.toString() !==
-        req.user._id.toString()
-    ) {
+    const userId = req.user._id.toString();
+    const sameUser = (user) =>
+      user && user._id.toString() === userId;
+
+    const commitment = payment.commitment;
+    const lot = commitment?.lot;
+    const pool = commitment?.supplyPool;
+
+    const isAuthorized =
+      req.user.role === "admin" ||
+      sameUser(payment.payer) ||
+      sameUser(payment.receiver) ||
+      sameUser(commitment?.buyer) ||
+      sameUser(lot?.farmer) ||
+      sameUser(lot?.aggregator) ||
+      sameUser(pool?.aggregator);
+
+    if (!isAuthorized) {
       return res.status(403).json({
         success: false,
         message:
@@ -177,12 +206,15 @@ const getPaymentById = async (req, res) => {
       data: payment,
     });
   } catch (error) {
+    console.error("Get payment by ID error:", error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Unable to retrieve payment transaction",
     });
   }
 };
+
 
 
 const getPayments = async (req, res) => {

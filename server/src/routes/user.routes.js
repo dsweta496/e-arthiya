@@ -15,7 +15,7 @@ const {
 
 const router = express.Router();
 
-router.post("/", createUser);
+router.post("/", protect, authorizeRoles("admin"), createUser);
 
 router.get("/", protect, getUsers);
 

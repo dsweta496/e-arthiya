@@ -249,38 +249,79 @@ const cancelCommitment = async (req, res) => {
   }
 };
 
-const getCommitmentById = async (
-  req,
-  res
-) => {
+
+const getCommitmentById = async (req, res) => {
   try {
-    const commitment =
-      await PurchaseCommitment.findById(
-        req.params.id
-      )
-        .populate("lot")
-        .populate("buyer", "name phone")
-        .populate("auction")
-        .populate("supplyIntent")
-        .populate("supplyPool")
-        .populate("procurementRequest");
+    const commitment = await PurchaseCommitment.findById(
+      req.params.id
+    )
+      .populate({
+        path: "lot",
+        populate: [
+          { path: "farmer", select: "name phone role" },
+          { path: "aggregator", select: "name phone role" },
+        ],
+      })
+      .populate("buyer", "name phone role")
+      .populate("auction")
+      .populate({
+        path: "supplyIntent",
+        populate: {
+          path: "farmer",
+          select: "name phone role",
+        },
+      })
+      .populate({
+        path: "supplyPool",
+        populate: {
+          path: "aggregator",
+          select: "name phone role",
+        },
+      })
+      .populate("procurementRequest");
 
     if (!commitment) {
       return res.status(404).json({
         success: false,
-        message:
-          "Purchase commitment not found",
+        message: "Purchase commitment not found",
       });
     }
 
-    res.status(200).json({
+    const userId = req.user._id.toString();
+
+    const sameUser = (user) =>
+      user && user._id.toString() === userId;
+
+    const lot = commitment.lot;
+    const supplyIntent = commitment.supplyIntent;
+    const supplyPool = commitment.supplyPool;
+
+    const isAuthorized =
+      req.user.role === "admin" ||
+      sameUser(commitment.buyer) ||
+      sameUser(lot?.farmer) ||
+      sameUser(lot?.aggregator) ||
+      sameUser(supplyIntent?.farmer) ||
+      sameUser(supplyPool?.aggregator);
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not authorized to view this commitment",
+      });
+    }
+
+    return res.status(200).json({
       success: true,
       data: commitment,
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("Get commitment by ID error:", error);
+
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Unable to retrieve purchase commitment",
     });
   }
 };
@@ -289,11 +330,32 @@ const getCommitmentById = async (
 const getCommitments = async (req, res) => {
   try {
     const basePopulate = [
-      { path: "lot", populate: { path: "aggregator", select: "name phone role" } },
-      { path: "buyer", select: "name phone" },
+      {
+        path: "lot",
+        populate: [
+          { path: "farmer", select: "name phone role" },
+          { path: "aggregator", select: "name phone role" },
+        ],
+      },
+      { path: "buyer", select: "name phone role" },
       { path: "auction" },
-      { path: "supplyIntent" },
-      { path: "supplyPool", populate: { path: "aggregator", select: "name phone role" } },
+      {
+        path: "supplyIntent",
+        populate: [
+          { path: "farmer", select: "name phone role" },
+          { path: "aggregator", select: "name phone role" },
+        ],
+      },
+      {
+        path: "supplyPool",
+        populate: [
+          { path: "aggregator", select: "name phone role" },
+          {
+            path: "contributors.farmer",
+            select: "name phone role",
+          },
+        ],
+      },
       { path: "procurementRequest" },
     ];
 
@@ -301,34 +363,59 @@ const getCommitments = async (req, res) => {
       .populate(basePopulate)
       .sort({ createdAt: -1 });
 
+    const userId = req.user._id.toString();
+
+    const sameUser = (user) => {
+      if (!user) return false;
+
+      const id = user._id ? user._id : user;
+
+      return id.toString() === userId;
+    };
+
     if (req.user.role === "buyer") {
       commitments = commitments.filter(
-        (item) =>
-          item.buyer &&
-          item.buyer._id.toString() === req.user._id.toString()
+        (item) => sameUser(item.buyer)
       );
-    }
-
-    if (req.user.role === "farmer") {
-      commitments = commitments.filter(
-        (item) =>
-          item.lot?.farmer?.toString() === req.user._id.toString() ||
-          item.supplyIntent?.farmer?.toString() === req.user._id.toString()
-      );
-    }
-
-    if (req.user.role === "fpo" || req.user.role === "arthiya") {
+    } else if (req.user.role === "farmer") {
       commitments = commitments.filter((item) => {
-        const lotOwned =
-          item.lot?.aggregator &&
-          item.lot.aggregator._id.toString() === req.user._id.toString();
+        const ownsLot = sameUser(item.lot?.farmer);
 
-        const poolOwned =
-          item.supplyPool?.aggregator &&
-          item.supplyPool.aggregator._id.toString() === req.user._id.toString();
+        const ownsIntent = sameUser(
+          item.supplyIntent?.farmer
+        );
 
-        return lotOwned || poolOwned;
+        const contributesToPool =
+          item.supplyPool?.contributors?.some(
+            (contributor) =>
+              sameUser(contributor.farmer)
+          ) || false;
+
+        return ownsLot || ownsIntent || contributesToPool;
       });
+    } else if (
+      req.user.role === "fpo" ||
+      req.user.role === "arthiya"
+    ) {
+      commitments = commitments.filter((item) => {
+        const managesLot =
+          item.lot?.aggregatorType === req.user.role &&
+          sameUser(item.lot?.aggregator);
+
+        const managesIntent =
+          item.supplyIntent?.aggregatorType ===
+          req.user.role &&
+          sameUser(item.supplyIntent?.aggregator);
+
+        const managesPool =
+          item.supplyPool?.aggregatorType ===
+          req.user.role &&
+          sameUser(item.supplyPool?.aggregator);
+
+        return managesLot || managesIntent || managesPool;
+      });
+    } else if (req.user.role !== "admin") {
+      commitments = [];
     }
 
     if (req.query.status) {
@@ -349,12 +436,15 @@ const getCommitments = async (req, res) => {
       data: commitments,
     });
   } catch (error) {
+    console.error("Get commitments error:", error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Unable to retrieve commitments",
     });
   }
 };
+
 
 module.exports = {
   createCommitment,

@@ -1,7 +1,8 @@
 const express = require("express");
-
 const {
   createAllocationController,
+  approveAllocationController,
+  acceptFarmerOfferController,
   getAllocations,
   getAllocationById,
   getAvailableQuantityController,
@@ -9,62 +10,19 @@ const {
   commitAllocationController,
   fulfillAllocationController,
 } = require("../controllers/allocation.controller");
-
-const {
-  protect,
-  authorizeRoles,
-} = require("../middleware/auth.middleware");
+const { protect, authorizeRoles } = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
-// Create allocation
-router.post(
-  "/",
-  protect,
-  authorizeRoles("farmer", "buyer", "fpo", "arthiya"),
-  createAllocationController
-);
-
-// View allocations
-router.get(
-  "/",
-  protect,
-  getAllocations
-);
-
-// Available source quantity
-router.get(
-  "/availability/:sourceType/:sourceId",
-  protect,
-  getAvailableQuantityController
-);
-
-// Get allocation by ID
-router.get(
-  "/:id",
-  protect,
-  getAllocationById
-);
-
-// Release allocation
-router.patch(
-  "/:id/release",
-  protect,
-  releaseAllocationController
-);
-
-// Commit allocation
-router.patch(
-  "/:id/commit",
-  protect,
-  commitAllocationController
-);
-
-// Fulfill allocation
-router.patch(
-  "/:id/fulfill",
-  protect,
-  fulfillAllocationController
-);
+// Buyer proposes; the proposal remains non-consuming until supplier approval.
+router.post("/", protect, authorizeRoles("buyer"), createAllocationController);
+router.get("/", protect, getAllocations);
+router.get("/availability/:sourceType/:sourceId", protect, getAvailableQuantityController);
+router.get("/:id", protect, getAllocationById);
+router.patch("/:id/approve", protect, authorizeRoles("farmer", "fpo", "arthiya", "admin"), approveAllocationController);
+router.patch("/:id/accept-offer", protect, authorizeRoles("buyer", "admin"), acceptFarmerOfferController);
+router.patch("/:id/release", protect, authorizeRoles("farmer", "fpo", "arthiya", "admin"), releaseAllocationController);
+router.patch("/:id/commit", protect, authorizeRoles("buyer", "admin"), commitAllocationController);
+router.patch("/:id/fulfill", protect, authorizeRoles("farmer", "fpo", "arthiya", "admin"), fulfillAllocationController);
 
 module.exports = router;

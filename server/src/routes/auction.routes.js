@@ -25,6 +25,7 @@ const {
 const {
   protect,
   authorizeRoles,
+  requireVerifiedOrganization,
 } = require("../middleware/auth.middleware");
 
 const router = express.Router();
@@ -34,6 +35,7 @@ router.post(
   "/",
   protect,
   authorizeRoles("farmer", "fpo", "arthiya"),
+  requireVerifiedOrganization,
   createAuction
 );
 
@@ -53,6 +55,7 @@ router.post(
   "/:id/close",
   protect,
   authorizeRoles("farmer", "fpo", "arthiya"),
+  requireVerifiedOrganization,
   closeAuction
 );
 

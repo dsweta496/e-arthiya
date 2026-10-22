@@ -206,13 +206,28 @@ const updateLot = async (req, res) => {
       });
     }
 
-    if (req.user.role === "farmer" && existingLot.farmer.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only update your own produce lots",
-      });
-    }
+    const userId = req.user._id.toString();
 
+    if (req.user.role === "farmer") {
+      if (existingLot.farmer.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update your own produce lots",
+        });
+      }
+    } else if (["fpo", "arthiya"].includes(req.user.role)) {
+      const managesLot =
+        existingLot.aggregator &&
+        existingLot.aggregator.toString() === userId &&
+        existingLot.aggregatorType === req.user.role;
+
+      if (!managesLot) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update produce lots managed by your organization",
+        });
+      }
+    }
     const lot = await ProduceLot.findByIdAndUpdate(
       req.params.id,
       updates,

@@ -88,7 +88,25 @@ const authorizeRoles = (...allowedRoles) => {
   };
 };
 
+const requireVerifiedOrganization = (req, res, next) => {
+  const organizationRoles = ["fpo", "arthiya"];
+
+  if (
+    organizationRoles.includes(req.user?.role) &&
+    req.user.verificationStatus !== "verified"
+  ) {
+    return res.status(403).json({
+      success: false,
+      message:
+        "Your FPO/Arthiya account is awaiting verification. Marketplace operations are available after verification.",
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   protect,
   authorizeRoles,
+  requireVerifiedOrganization,
 };

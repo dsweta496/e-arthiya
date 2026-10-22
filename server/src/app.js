@@ -17,6 +17,7 @@ const supplyPoolRoutes = require("./routes/supplyPool.route");
 const allocationRoutes = require("./routes/allocation.routes");
 const matchingRoutes = require("./routes/matching.routes");
 const paymentRoutes = require("./routes/payment.routes");
+const blockchainRoutes = require("./routes/blockchain.routes");
 
 const app = express();
 
@@ -53,6 +54,8 @@ app.get("/api/health", (req, res) => {
     message: "e-Arthiya API is running",
   });
 });
+
+app.use("/api/blockchain", blockchainRoutes);
 
 app.use("/api/supply-pools", supplyPoolRoutes);
 

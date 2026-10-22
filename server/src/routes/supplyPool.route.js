@@ -9,6 +9,7 @@ const {
 const {
   protect,
   authorizeRoles,
+  requireVerifiedOrganization,
 } = require("../middleware/auth.middleware");
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.post(
   "/",
   protect,
   authorizeRoles("fpo", "arthiya"),
+  requireVerifiedOrganization,
   createSupplyPool
 );
 

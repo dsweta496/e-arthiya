@@ -1,151 +1,218 @@
+const mongoose = require("mongoose");
 const Allocation = require("../models/Allocation");
 const ProcurementRequest = require("../models/ProcurementRequest");
+const ProduceLot = require("../models/ProduceLot");
+const SupplyIntent = require("../models/SupplyIntent");
 const {
   createAllocation,
+  approveAllocation,
   releaseAllocation,
   commitAllocation,
   fulfillAllocation,
   getAvailableQuantity,
 } = require("../services/allocation.service");
 
-async function assertBuyerOwnsRequest(req, procurementRequestId) {
-  if (req.user.role !== "buyer") return null;
-  const request = await ProcurementRequest.findById(procurementRequestId).select("buyer");
-  if (!request) throw new Error("Procurement request not found");
-  if (request.buyer.toString() !== req.user._id.toString()) {
-    const error = new Error("You are not authorized to use this procurement request");
-    error.statusCode = 403;
-    throw error;
+const isValidId = (id) => mongoose.isValidObjectId(id);
+function httpError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+function sendError(res, error, fallback = 500) {
+  return res.status(error.statusCode || fallback).json({ success: false, message: error.message || "Request failed" });
+}
+
+async function assertBuyerOwnsRequest(req, requestId) {
+  // Accept either a raw ID or a populated Mongoose document.
+  const normalizedRequestId = requestId && requestId._id ? requestId._id : requestId;
+  if (!isValidId(normalizedRequestId)) throw httpError("Valid procurement request ID is required", 400);
+  const request = await ProcurementRequest.findById(normalizedRequestId).select("buyer");
+  if (!request) throw httpError("Procurement request not found", 404);
+  if (req.user.role !== "admin" && request.buyer.toString() !== req.user._id.toString()) {
+    throw httpError("You are not authorized to use this procurement request", 403);
   }
   return request;
 }
 
-async function assertBuyerOwnsAllocation(req, allocation) {
-  if (req.user.role !== "buyer") return;
-  const request = await ProcurementRequest.findById(allocation.procurementRequest).select("buyer");
-  if (!request || request.buyer.toString() !== req.user._id.toString()) {
-    const error = new Error("You are not authorized to modify this allocation");
-    error.statusCode = 403;
-    throw error;
+async function getAllocationSource(allocation) {
+  if (allocation.sourceType === "lot") return ProduceLot.findById(allocation.sourceId);
+  if (allocation.sourceType === "supply_intent") return SupplyIntent.findById(allocation.sourceId);
+  return null;
+}
+
+async function assertCanManageSource(req, source) {
+  if (!source) throw httpError("Allocation source not found", 404);
+  if (req.user.role === "admin") return;
+  const userId = req.user._id.toString();
+  if (req.user.role === "farmer" && source.farmer && source.farmer.toString() === userId) return;
+  if (["fpo", "arthiya"].includes(req.user.role) && req.user.verificationStatus === "verified" &&
+      source.aggregatorType === req.user.role && source.aggregator && source.aggregator.toString() === userId) return;
+  throw httpError("You are not authorized to manage this supply source", 403);
+}
+
+async function assertCanAccessAllocation(req, allocation) {
+  if (req.user.role === "admin") return;
+  if (req.user.role === "buyer") {
+    await assertBuyerOwnsRequest(req, allocation.procurementRequest);
+    return;
   }
+  const source = await getAllocationSource(allocation);
+  await assertCanManageSource(req, source);
 }
 
 const createAllocationController = async (req, res) => {
   try {
-    const { procurementRequestId, farmerId, sourceType, sourceId, quantity, unit } = req.body;
+    if (req.user.role !== "buyer") throw httpError("Only buyers can propose allocations", 403);
+    const { procurementRequestId, farmerId, sourceType, sourceId, quantity, unit } = req.body || {};
     await assertBuyerOwnsRequest(req, procurementRequestId);
+    const allocation = await createAllocation({ procurementRequestId, farmerId, sourceType, sourceId, quantity, unit });
+    return res.status(201).json({ success: true, message: "Allocation proposal submitted for supplier approval", allocation });
+  } catch (error) { return sendError(res, error, 400); }
+};
 
-    const allocation = await createAllocation({
-      procurementRequestId,
-      farmerId,
-      sourceType,
-      sourceId,
-      quantity,
-      unit,
-    });
+const approveAllocationController = async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
+    const allocation = await Allocation.findById(req.params.id);
+    if (!allocation) throw httpError("Allocation not found", 404);
+    if ((allocation.initiatedBy || "buyer") !== "buyer") throw httpError("Farmer-originated offers must be accepted by the requesting buyer", 409);
+    const source = await getAllocationSource(allocation);
+    await assertCanManageSource(req, source);
+    const updated = await approveAllocation(req.params.id);
+    return res.status(200).json({ success: true, message: "Allocation approved and quantity reserved", allocation: updated });
+  } catch (error) { return sendError(res, error, 400); }
+};
 
-    return res.status(201).json({ message: "Allocation created successfully", allocation });
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({ message: error.message });
-  }
+const acceptFarmerOfferController = async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
+    const allocation = await Allocation.findById(req.params.id);
+    if (!allocation) throw httpError("Allocation not found", 404);
+    if ((allocation.initiatedBy || "buyer") !== "farmer") throw httpError("This allocation is not a farmer-originated offer", 409);
+    if (req.user.role !== "admin") await assertBuyerOwnsRequest(req, allocation.procurementRequest);
+    const updated = await approveAllocation(req.params.id);
+    return res.status(200).json({ success: true, message: "Farmer offer accepted and quantity reserved", allocation: updated });
+  } catch (error) { return sendError(res, error, 400); }
 };
 
 const getAllocations = async (req, res) => {
   try {
     const filter = {};
-
     if (req.user.role === "buyer") {
-      const ownRequests = await ProcurementRequest.find({ buyer: req.user._id }).select("_id");
-      filter.procurementRequest = { $in: ownRequests.map((item) => item._id) };
-    } else if (req.query.procurementRequest) {
-      filter.procurementRequest = req.query.procurementRequest;
+      const requests = await ProcurementRequest.find({ buyer: req.user._id }).select("_id").lean();
+      filter.procurementRequest = { $in: requests.map((request) => request._id) };
+    } else if (req.user.role === "farmer") {
+      filter.farmer = req.user._id;
+    } else if (["fpo", "arthiya"].includes(req.user.role)) {
+      if (req.user.verificationStatus !== "verified") throw httpError("Organization verification is required", 403);
+      const sourceFilter = { aggregator: req.user._id, aggregatorType: req.user.role };
+      const [lots, intents] = await Promise.all([
+        ProduceLot.find(sourceFilter).select("_id").lean(),
+        SupplyIntent.find(sourceFilter).select("_id").lean(),
+      ]);
+      filter.$or = [
+        { sourceType: "lot", sourceId: { $in: lots.map((item) => item._id) } },
+        { sourceType: "supply_intent", sourceId: { $in: intents.map((item) => item._id) } },
+      ];
+    } else if (req.user.role !== "admin") {
+      throw httpError("You are not authorized to view allocations", 403);
     }
 
-    if (req.query.farmer) filter.farmer = req.query.farmer;
-    if (req.query.sourceType) filter.sourceType = req.query.sourceType;
-    if (req.query.sourceId) filter.sourceId = req.query.sourceId;
-    if (req.query.status) filter.status = req.query.status;
+    if (req.query.procurementRequest) {
+      if (!isValidId(req.query.procurementRequest)) throw httpError("Invalid procurement request ID", 400);
+      if (req.user.role === "buyer") await assertBuyerOwnsRequest(req, req.query.procurementRequest);
+      filter.procurementRequest = req.query.procurementRequest;
+    }
+    if (req.query.farmer) {
+      if (!isValidId(req.query.farmer)) throw httpError("Invalid farmer ID", 400);
+      // Non-admin users cannot use query filters to broaden their visibility.
+      if (req.user.role === "farmer" && req.query.farmer !== req.user._id.toString()) throw httpError("You can only view your own allocations", 403);
+      filter.farmer = req.query.farmer;
+    }
+    if (req.query.sourceType) {
+      if (!["lot", "supply_intent"].includes(req.query.sourceType)) throw httpError("Invalid source type", 400);
+      filter.sourceType = req.query.sourceType;
+    }
+    if (req.query.sourceId) {
+      if (!isValidId(req.query.sourceId)) throw httpError("Invalid source ID", 400);
+      filter.sourceId = req.query.sourceId;
+    }
+    if (req.query.status) {
+      const allowed = ["proposed", "reserved", "committed", "fulfilled", "released", "cancelled"];
+      if (!allowed.includes(req.query.status)) throw httpError("Invalid allocation status", 400);
+      filter.status = req.query.status;
+    }
 
     const allocations = await Allocation.find(filter)
       .populate("procurementRequest", "crop variety quantity unit requiredBy availabilityFrom buyer")
       .populate("farmer", "name phone role location")
       .sort({ createdAt: -1 });
-
-    return res.status(200).json({ count: allocations.length, allocations });
-  } catch (error) {
-    return res.status(500).json({ message: "Failed to fetch allocations", error: error.message });
-  }
+    return res.status(200).json({ success: true, count: allocations.length, allocations });
+  } catch (error) { return sendError(res, error, 500); }
 };
 
 const getAllocationById = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
     const allocation = await Allocation.findById(req.params.id)
       .populate("procurementRequest", "crop variety quantity unit requiredBy availabilityFrom buyer")
       .populate("farmer", "name phone role location");
-
-    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
-    await assertBuyerOwnsAllocation(req, allocation);
-    return res.status(200).json(allocation);
-  } catch (error) {
-    return res.status(error.statusCode || 500).json({ message: error.message });
-  }
+    if (!allocation) throw httpError("Allocation not found", 404);
+    await assertCanAccessAllocation(req, allocation);
+    return res.status(200).json({ success: true, allocation });
+  } catch (error) { return sendError(res, error, 500); }
 };
 
 const getAvailableQuantityController = async (req, res) => {
   try {
     const { sourceType, sourceId } = req.params;
+    if (!isValidId(sourceId)) throw httpError("Invalid source ID", 400);
     const result = await getAvailableQuantity(sourceType, sourceId);
-    return res.status(200).json({
-      sourceType,
-      sourceId,
-      quantity: result.quantity,
-      allocatedQuantity: result.allocatedQuantity,
-      availableQuantity: result.availableQuantity,
-      unit: result.unit,
-    });
-  } catch (error) {
-    return res.status(400).json({ message: error.message });
-  }
+    // Quantity is marketplace data; no personal source fields are returned here.
+    return res.status(200).json({ success: true, sourceType, sourceId, quantity: result.quantity, allocatedQuantity: result.allocatedQuantity, availableQuantity: result.availableQuantity, unit: result.unit });
+  } catch (error) { return sendError(res, error, 400); }
 };
 
 const releaseAllocationController = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
     const allocation = await Allocation.findById(req.params.id);
-    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
-    await assertBuyerOwnsAllocation(req, allocation);
+    if (!allocation) throw httpError("Allocation not found", 404);
+    await assertCanManageSource(req, await getAllocationSource(allocation));
     const updated = await releaseAllocation(req.params.id);
-    return res.status(200).json({ message: "Allocation released successfully", allocation: updated });
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({ message: error.message });
-  }
+    return res.status(200).json({ success: true, message: "Allocation released successfully", allocation: updated });
+  } catch (error) { return sendError(res, error, 400); }
 };
 
 const commitAllocationController = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
     const allocation = await Allocation.findById(req.params.id);
-    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
-    await assertBuyerOwnsAllocation(req, allocation);
+    if (!allocation) throw httpError("Allocation not found", 404);
+    if (req.user.role !== "admin") {
+      if (req.user.role !== "buyer") throw httpError("Only the requesting buyer can commit this allocation", 403);
+      await assertBuyerOwnsRequest(req, allocation.procurementRequest);
+    }
     const updated = await commitAllocation(req.params.id);
-    return res.status(200).json({ message: "Allocation committed successfully", allocation: updated });
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({ message: error.message });
-  }
+    return res.status(200).json({ success: true, message: "Allocation committed successfully", allocation: updated });
+  } catch (error) { return sendError(res, error, 400); }
 };
 
 const fulfillAllocationController = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
     const allocation = await Allocation.findById(req.params.id);
-    if (!allocation) return res.status(404).json({ message: "Allocation not found" });
-    await assertBuyerOwnsAllocation(req, allocation);
+    if (!allocation) throw httpError("Allocation not found", 404);
+    await assertCanManageSource(req, await getAllocationSource(allocation));
     const updated = await fulfillAllocation(req.params.id);
-    return res.status(200).json({ message: "Allocation fulfilled successfully", allocation: updated });
-  } catch (error) {
-    return res.status(error.statusCode || 400).json({ message: error.message });
-  }
+    return res.status(200).json({ success: true, message: "Allocation fulfilled successfully", allocation: updated });
+  } catch (error) { return sendError(res, error, 400); }
 };
 
 module.exports = {
   createAllocationController,
+  approveAllocationController,
+  acceptFarmerOfferController,
   getAllocations,
   getAllocationById,
   getAvailableQuantityController,

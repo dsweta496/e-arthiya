@@ -37,17 +37,27 @@ const allocationSchema = new mongoose.Schema(
       required: true,
     },
 
+
+    initiatedBy: {
+      type: String,
+      enum: ["buyer", "farmer"],
+      default: "buyer",
+      index: true,
+    },
+
     status: {
       type: String,
       enum: [
+        "proposed",
         "reserved",
         "committed",
         "fulfilled",
         "released",
         "cancelled",
       ],
-      default: "reserved",
+      default: "proposed",
     },
+
 
     allocatedAt: {
       type: Date,
@@ -73,6 +83,8 @@ allocationSchema.index({
   sourceId: 1,
   status: 1,
 });
+
+allocationSchema.index({ procurementRequest: 1, status: 1, initiatedBy: 1 });
 
 module.exports = mongoose.model(
   "Allocation",
