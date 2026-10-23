@@ -1,3 +1,4 @@
+const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service");
 const PurchaseCommitment =
   require("../models/PurchaseCommitment");
 
@@ -177,75 +178,59 @@ const createCommitment = async (req, res) => {
         commitmentData
       );
 
+    const blockchain = await recordBlockchainAnchor({ entityType: "commitment", entityId: commitment._id, eventType: "COMMITMENT_CREATED", payload: { commitmentId: String(commitment._id), source: commitment.source, agreedPrice: commitment.agreedPrice, quantity: commitment.quantity, unit: commitment.unit, depositAmount: commitment.depositAmount, status: commitment.status }, recordedBy: req.user._id });
     res.status(201).json({
       success: true,
-      message:
-        "Purchase commitment created successfully",
+      message: "Purchase commitment created successfully",
       data: commitment,
+      blockchain,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    const status = error.code === 11000 ? 409 : (error.statusCode || 500);
+    res.status(status).json({ success: false, message: status === 409 ? "A commitment already exists for this auction" : (error.message || "Unable to create commitment") });
   }
 };
 
 const cancelCommitment = async (req, res) => {
   try {
-    const commitment = await PurchaseCommitment.findById(
-      req.params.id
-    );
-
-    if (!commitment) {
-      return res.status(404).json({
-        success: false,
-        message: "Purchase commitment not found",
-      });
+    const commitment = await PurchaseCommitment.findById(req.params.id);
+    if (!commitment) return res.status(404).json({ success: false, message: "Purchase commitment not found" });
+    if (!commitment.buyer || commitment.buyer.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Only the buyer who owns this commitment can withdraw it" });
+    }
+    if (!["pending_deposit", "confirmed", "active"].includes(commitment.status)) {
+      return res.status(409).json({ success: false, message: `Commitment cannot be withdrawn from status '${commitment.status}'` });
     }
 
-    // Only the buyer who owns the commitment
-    // can request cancellation.
-    if (
-      !commitment.buyer ||
-      commitment.buyer.toString() !==
-      req.user._id.toString()
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Only the buyer who owns this commitment can cancel it",
-      });
+    const previousStatus = commitment.status;
+    if (previousStatus === "pending_deposit") {
+      commitment.status = "cancelled";
+      commitment.failureReason = "Buyer withdrew before completing the security deposit";
+      commitment.reroutingStatus = "not_required";
+      // The demo has not collected a deposit yet. Return the lot to reserved (not available)
+      // because its auction outcome still exists; do not make it publicly available implicitly.
+      if (commitment.lot) {
+        await ProduceLot.findOneAndUpdate({ _id: commitment.lot, status: "committed" }, { $set: { status: "reserved" } });
+      }
+    } else {
+      commitment.status = "defaulted";
+      commitment.failureReason = "Buyer withdrew after commitment confirmation";
+      commitment.reroutingStatus = "pending";
     }
-
-    // Only confirmed commitments can currently
-    // enter the default/backout flow.
-    if (commitment.status !== "confirmed") {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Only a confirmed commitment can be cancelled",
-      });
-    }
-
-    commitment.status = "defaulted";
-    commitment.failureReason =
-      "Buyer cancelled after confirmation";
-    commitment.reroutingStatus = "pending";
-
     await commitment.save();
+    const blockchain = await recordBlockchainAnchor({ entityType: "commitment", entityId: commitment._id, eventType: "COMMITMENT_WITHDRAWN", payload: { commitmentId: String(commitment._id), previousStatus, status: commitment.status, reroutingStatus: commitment.reroutingStatus }, recordedBy: req.user._id });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message:
-        "Commitment cancelled and marked for rerouting",
+      message: previousStatus === "pending_deposit"
+        ? "Commitment withdrawn before deposit; no refund is due"
+        : "Commitment marked as defaulted and queued for rerouting; any refund requires review",
       data: commitment,
+      blockchain,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Withdraw commitment error:", error);
+    return res.status(500).json({ success: false, message: "Unable to withdraw commitment" });
   }
 };
 

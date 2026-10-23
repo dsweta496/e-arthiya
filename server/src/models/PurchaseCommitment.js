@@ -201,7 +201,11 @@ const purchaseCommitmentSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model(
-  "PurchaseCommitment",
-  purchaseCommitmentSchema
+// One auction can produce at most one platform commitment. Null/absent auction
+// references for future/direct commitments are intentionally excluded.
+purchaseCommitmentSchema.index(
+  { auction: 1 },
+  { unique: true, partialFilterExpression: { auction: { $type: "objectId" } } }
 );
+
+module.exports = mongoose.model("PurchaseCommitment", purchaseCommitmentSchema);

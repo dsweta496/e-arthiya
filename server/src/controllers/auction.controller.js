@@ -1,3 +1,4 @@
+const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service");
 const Auction = require("../models/Auction");
 const ProduceLot = require("../models/ProduceLot");
 const Bid = require("../models/Bid");
@@ -100,10 +101,26 @@ const createAuction = async (req, res) => {
     lotData.status = "in_auction";
     await lotData.save();
 
+    const blockchain = await recordBlockchainAnchor({
+      entityType: "auction",
+      entityId: auction._id,
+      eventType: "AUCTION_CREATED",
+      payload: {
+        auctionId: String(auction._id),
+        lotId: String(auction.lot),
+        startTime: auction.startTime.toISOString(),
+        endTime: auction.endTime.toISOString(),
+        startingPrice: auction.startingPrice,
+        status: auction.status,
+      },
+      recordedBy: req.user._id,
+    });
+
     return res.status(201).json({
       success: true,
       message: "Auction created successfully",
       data: auction,
+      blockchain,
     });
   } catch (error) {
     return res.status(500).json({
@@ -262,14 +279,14 @@ const closeAuction = async (req, res) => {
       );
     }
 
-    await ProduceLot.findByIdAndUpdate(auction.lot._id, {
-      status: "reserved",
-    });
+    await ProduceLot.findByIdAndUpdate(auction.lot._id, { status: "reserved" });
+    const blockchain = await recordBlockchainAnchor({ entityType: "auction", entityId: auction._id, eventType: "AUCTION_CLOSED", payload: { auctionId: String(auction._id), lotId: String(auction.lot._id), result, status: auction.status, winningBidId: auction.highestBid ? String(auction.highestBid) : null, selectedExternalOfferId: auction.selectedExternalOffer ? String(auction.selectedExternalOffer) : null, closedAt: auction.closedAt.toISOString() }, recordedBy: req.user._id });
 
     return res.status(200).json({
       success: true,
       message: "Auction closed successfully",
       data: auction,
+      blockchain,
     });
   } catch (error) {
     return res.status(500).json({

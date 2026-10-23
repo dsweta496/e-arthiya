@@ -1,3 +1,4 @@
+const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service");
 const Bid = require("../models/Bid");
 const Auction = require("../models/Auction");
 const User = require("../models/User");
@@ -53,10 +54,12 @@ const createBid = async (req, res) => {
     auction.highestBid = bid._id;
     await auction.save();
 
+    const blockchain = await recordBlockchainAnchor({ entityType: "bid", entityId: bid._id, eventType: "BID_PLACED", payload: { bidId: String(bid._id), auctionId: String(auction._id), amount: bid.amount, status: bid.status }, recordedBy: req.user._id });
     return res.status(201).json({
       success: true,
       message: "Bid placed successfully",
       data: bid,
+      blockchain,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

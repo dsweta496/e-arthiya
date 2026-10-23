@@ -1,3 +1,4 @@
+const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service");
 const ExternalOffer = require("../models/ExternalOffer");
 const Auction = require("../models/Auction");
 const ProduceLot = require("../models/ProduceLot");
@@ -43,8 +44,8 @@ const createExternalOffer = async (req, res) => {
     }
 
     if (
-      auction.lot.farmer.toString() !==
-      submittedByFarmer
+      auction.lot.farmer.toString() !== submittedByFarmer ||
+      req.user._id.toString() !== submittedByFarmer
     ) {
       return res.status(403).json({
         success: false,
@@ -62,10 +63,25 @@ const createExternalOffer = async (req, res) => {
       evidence,
     });
 
-    res.status(201).json({
+    const blockchain = await recordBlockchainAnchor({
+      entityType: "external_offer",
+      entityId: offer._id,
+      eventType: "EXTERNAL_OFFER_CREATED",
+      // Do not place buyer names, phone numbers, or evidence contents in the public-chain payload.
+      payload: {
+        offerId: String(offer._id),
+        auctionId: String(auction._id),
+        offeredAmount: offer.offeredAmount,
+        status: offer.status,
+      },
+      recordedBy: req.user._id,
+    });
+
+    return res.status(201).json({
       success: true,
       message: "External offer recorded successfully",
       data: offer,
+      blockchain,
     });
   } catch (error) {
     res.status(500).json({
@@ -144,8 +160,8 @@ const selectExternalOffer = async (req, res) => {
     }
 
     if (
-      auction.lot.farmer.toString() !==
-      offer.submittedByFarmer.toString()
+      auction.lot.farmer.toString() !== offer.submittedByFarmer.toString() ||
+      req.user._id.toString() !== auction.lot.farmer.toString()
     ) {
       return res.status(403).json({
         success: false,
@@ -163,8 +179,8 @@ const selectExternalOffer = async (req, res) => {
     await offer.save();
 
     auction.selectedExternalOffer = offer._id;
-
     await auction.save();
+    const blockchain = await recordBlockchainAnchor({ entityType: "external_offer", entityId: offer._id, eventType: "EXTERNAL_OFFER_SELECTED", payload: { offerId: String(offer._id), auctionId: String(auction._id), offeredAmount: offer.offeredAmount, status: offer.status }, recordedBy: req.user._id });
 
     res.status(200).json({
       success: true,
@@ -173,6 +189,7 @@ const selectExternalOffer = async (req, res) => {
         auction,
         selectedOffer: offer,
       },
+      blockchain,
     });
   } catch (error) {
     res.status(500).json({

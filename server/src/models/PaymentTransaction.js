@@ -89,6 +89,14 @@ const paymentTransactionSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+
+    // Stable operation key prevents duplicate demo payment records on retries.
+    idempotencyKey: {
+      type: String,
+      default: undefined,
+      trim: true,
+      maxlength: 160,
+    },
   },
   {
     timestamps: true,
@@ -100,10 +108,8 @@ paymentTransactionSchema.index({
   type: 1,
 });
 
-paymentTransactionSchema.index({
-  payer: 1,
-  status: 1,
-});
+paymentTransactionSchema.index({ payer: 1, status: 1 });
+paymentTransactionSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model(
   "PaymentTransaction",

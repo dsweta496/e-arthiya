@@ -6,6 +6,18 @@ const EVENT_TYPES = new Set([
   "TRADE_FULFILLED",
   "PAYMENT_SETTLED",
   "ALLOCATION_RESERVED",
+  "COMMITMENT_CREATED",
+  "COMMITMENT_WITHDRAWN",
+  "BALANCE_PAYMENT_RECORDED",
+  "PAYMENT_REFUNDED",
+  "ALLOCATION_RELEASED",
+  "ALLOCATION_COMMITTED",
+  "AUCTION_CLOSED",
+  "BID_PLACED",
+  "EXTERNAL_OFFER_SELECTED",
+  "ALLOCATION_CREATED",
+  "AUCTION_CREATED",
+  "EXTERNAL_OFFER_CREATED",
 ]);
 
 const ABI = [
@@ -41,6 +53,15 @@ function makeReadContract() {
   return new ethers.Contract(BLOCKCHAIN_CONTRACT_ADDRESS, ABI, makeProvider());
 }
 
+function canonicalJson(value) {
+  const sort = (v) => {
+    if (Array.isArray(v)) return v.map(sort);
+    if (v && typeof v === "object") return Object.keys(v).sort().reduce((o, k) => { o[k] = sort(v[k]); return o; }, {});
+    return v;
+  };
+  return JSON.stringify(sort(value));
+}
+
 function validateInput({ entityType, entityId, eventType, payload }) {
   if (typeof entityType !== "string" || !/^[a-zA-Z0-9_-]{2,40}$/.test(entityType)) {
     const error = new Error("entityType must be 2-40 letters, numbers, underscores or hyphens.");
@@ -62,7 +83,7 @@ function validateInput({ entityType, entityId, eventType, payload }) {
     error.statusCode = 400;
     throw error;
   }
-  const serialized = JSON.stringify(payload);
+  const serialized = canonicalJson(payload);
   if (serialized.length > 4000) {
     const error = new Error("payload is too large (maximum 4000 serialized characters).");
     error.statusCode = 400;
@@ -90,7 +111,23 @@ async function anchorTradeEvent(input) {
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(serializedPayload));
 
   if (await contract.recordedEventIds(eventId)) {
-    const error = new Error("This event has already been anchored on-chain.");
+    // Idempotent reconciliation: if a previous call mined but the API lost its
+    // response, recover the existing event log rather than submitting a duplicate.
+    const filter = contract.filters.TradeEventRecorded(eventId);
+    const latestBlock = await provider.getBlockNumber();
+    const logs = await contract.queryFilter(filter, Math.max(0, latestBlock - 100000), "latest");
+    const existing = logs[logs.length - 1];
+    if (existing) {
+      return {
+        success: true, alreadyRecorded: true, eventId, entityIdHash,
+        eventType: input.eventType, payloadHash,
+        transactionHash: existing.transactionHash,
+        blockNumber: existing.blockNumber,
+        contractAddress: process.env.BLOCKCHAIN_CONTRACT_ADDRESS,
+        network: (await provider.getNetwork()).name,
+      };
+    }
+    const error = new Error("Event is already marked on-chain but its log could not be located; reconcile manually.");
     error.statusCode = 409;
     throw error;
   }

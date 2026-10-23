@@ -1,3 +1,4 @@
+const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service");
 const mongoose = require("mongoose");
 const Allocation = require("../models/Allocation");
 const ProcurementRequest = require("../models/ProcurementRequest");
@@ -66,7 +67,23 @@ const createAllocationController = async (req, res) => {
     const { procurementRequestId, farmerId, sourceType, sourceId, quantity, unit } = req.body || {};
     await assertBuyerOwnsRequest(req, procurementRequestId);
     const allocation = await createAllocation({ procurementRequestId, farmerId, sourceType, sourceId, quantity, unit });
-    return res.status(201).json({ success: true, message: "Allocation proposal submitted for supplier approval", allocation });
+    // Record proposal creation separately from reservation: quantity is not reserved until approval.
+    const blockchain = await recordBlockchainAnchor({
+      entityType: "allocation",
+      entityId: allocation._id,
+      eventType: "ALLOCATION_CREATED",
+      payload: {
+        allocationId: String(allocation._id),
+        procurementRequestId: String(allocation.procurementRequest),
+        sourceType: allocation.sourceType,
+        sourceId: String(allocation.sourceId),
+        quantity: allocation.allocatedQuantity,
+        unit: allocation.unit,
+        status: allocation.status,
+      },
+      recordedBy: req.user._id,
+    });
+    return res.status(201).json({ success: true, message: "Allocation proposal submitted for supplier approval", allocation, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
 
@@ -79,7 +96,8 @@ const approveAllocationController = async (req, res) => {
     const source = await getAllocationSource(allocation);
     await assertCanManageSource(req, source);
     const updated = await approveAllocation(req.params.id);
-    return res.status(200).json({ success: true, message: "Allocation approved and quantity reserved", allocation: updated });
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RESERVED", payload: { allocationId: String(updated._id), sourceType: updated.sourceType, sourceId: String(updated.sourceId), quantity: updated.allocatedQuantity, unit: updated.unit, status: updated.status }, recordedBy: req.user._id });
+    return res.status(200).json({ success: true, message: "Allocation approved and quantity reserved", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
 
@@ -91,7 +109,8 @@ const acceptFarmerOfferController = async (req, res) => {
     if ((allocation.initiatedBy || "buyer") !== "farmer") throw httpError("This allocation is not a farmer-originated offer", 409);
     if (req.user.role !== "admin") await assertBuyerOwnsRequest(req, allocation.procurementRequest);
     const updated = await approveAllocation(req.params.id);
-    return res.status(200).json({ success: true, message: "Farmer offer accepted and quantity reserved", allocation: updated });
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RESERVED", payload: { allocationId: String(updated._id), sourceType: updated.sourceType, sourceId: String(updated.sourceId), quantity: updated.allocatedQuantity, unit: updated.unit, status: updated.status }, recordedBy: req.user._id });
+    return res.status(200).json({ success: true, message: "Farmer offer accepted and quantity reserved", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
 
@@ -180,7 +199,8 @@ const releaseAllocationController = async (req, res) => {
     if (!allocation) throw httpError("Allocation not found", 404);
     await assertCanManageSource(req, await getAllocationSource(allocation));
     const updated = await releaseAllocation(req.params.id);
-    return res.status(200).json({ success: true, message: "Allocation released successfully", allocation: updated });
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RELEASED", payload: { allocationId: String(updated._id), status: updated.status, releasedAt: updated.releasedAt ? new Date(updated.releasedAt).toISOString() : null }, recordedBy: req.user._id });
+    return res.status(200).json({ success: true, message: "Allocation released successfully", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
 
@@ -194,7 +214,8 @@ const commitAllocationController = async (req, res) => {
       await assertBuyerOwnsRequest(req, allocation.procurementRequest);
     }
     const updated = await commitAllocation(req.params.id);
-    return res.status(200).json({ success: true, message: "Allocation committed successfully", allocation: updated });
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_COMMITTED", payload: { allocationId: String(updated._id), status: updated.status, quantity: updated.allocatedQuantity, unit: updated.unit }, recordedBy: req.user._id });
+    return res.status(200).json({ success: true, message: "Allocation committed successfully", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
 
@@ -205,7 +226,8 @@ const fulfillAllocationController = async (req, res) => {
     if (!allocation) throw httpError("Allocation not found", 404);
     await assertCanManageSource(req, await getAllocationSource(allocation));
     const updated = await fulfillAllocation(req.params.id);
-    return res.status(200).json({ success: true, message: "Allocation fulfilled successfully", allocation: updated });
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "TRADE_FULFILLED", payload: { allocationId: String(updated._id), status: updated.status, quantity: updated.allocatedQuantity, unit: updated.unit }, recordedBy: req.user._id });
+    return res.status(200).json({ success: true, message: "Allocation fulfilled successfully", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
 
