@@ -305,3 +305,4 @@ function Metric({ label, value }) { return <div className="rounded-xl bg-slate-5
           <p className="mt-1 text-sm font-semibold text-slate-800">{value}</p>
           </div>; }
 function Alert({ children }) { return <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{children}</div>; }
+ 
