@@ -3,6 +3,8 @@ const PaymentTransaction = require("../models/PaymentTransaction");
 const PurchaseCommitment = require("../models/PurchaseCommitment");
 const ProduceLot = require("../models/ProduceLot");
 const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service");
+const FarmerPayout = require("../models/FarmerPayout");
+const Notification = require("../models/Notification");
 
 function sameId(a, b) { return a && b && String(a._id || a) === String(b._id || b); }
 function money(value) { return Math.round((Number(value) + Number.EPSILON) * 100) / 100; }
@@ -33,9 +35,9 @@ async function createDepositPayment(req, res) {
           transactionReference: `DEMO-DEP-${commitment._id}`, idempotencyKey: key, paidAt: new Date(),
         }], { session });
       }
-      commitment.status = "confirmed";
+      commitment.status = "pending_farmer_approval";
       await commitment.save({ session });
-      if (commitment.lot) await ProduceLot.findByIdAndUpdate(commitment.lot, { $set: { status: "committed" } }, { session });
+      // Supply remains uncommitted until the farmer approves the deposited commitment.
     });
     const blockchain = await recordBlockchainAnchor({ entityType: "payment", entityId: payment._id, eventType: "DEPOSIT_RECORDED", payload: { paymentId: String(payment._id), commitmentId: String(commitment._id), amount: payment.amount, currency: payment.currency, paymentStatus: payment.status, commitmentStatus: commitment.status, paymentMethod: "demo" }, recordedBy: req.user._id });
     try {
@@ -50,9 +52,12 @@ async function createDepositPayment(req, res) {
       // payment itself as failed because optional proof metadata could not be saved.
       console.error("Could not persist deposit proof metadata:", metadataError.message);
     }
+    // Notify the supplying farmer that a deposit was recorded and approval is needed.
+    const sourceFarmer = commitment.lot ? (await ProduceLot.findById(commitment.lot).select("farmer"))?.farmer : null;
+    if (sourceFarmer) await Notification.create({ recipient: sourceFarmer, type: "commitment_awaiting_approval", title: "Commitment awaiting approval", message: "A buyer has recorded the demo deposit. Review and approve the commitment.", entityType: "commitment", entityId: String(commitment._id) });
     // A separate commitment event makes the state transition independently discoverable.
-    const commitmentProof = await recordBlockchainAnchor({ entityType: "commitment", entityId: commitment._id, eventType: "COMMITMENT_CONFIRMED", payload: { commitmentId: String(commitment._id), status: commitment.status, depositPaymentId: String(payment._id), depositAmount: payment.amount }, recordedBy: req.user._id });
-    return res.status(201).json({ success: true, message: "Demo security deposit recorded and commitment confirmed", data: { payment, commitment }, blockchain, commitmentProof, paymentNotice: "DEMO PAYMENT ONLY: no real money was transferred." });
+    const commitmentProof = await recordBlockchainAnchor({ entityType: "commitment", entityId: commitment._id, eventType: "COMMITMENT_AWAITING_FARMER_APPROVAL", payload: { commitmentId: String(commitment._id), status: commitment.status, depositPaymentId: String(payment._id), depositAmount: payment.amount }, recordedBy: req.user._id });
+    return res.status(201).json({ success: true, message: "Demo deposit recorded; awaiting farmer approval", data: { payment, commitment }, blockchain, commitmentProof, paymentNotice: "DEMO PAYMENT ONLY: no real money was transferred." });
   } catch (error) {
     console.error("Create deposit payment error:", error);
     return apiError(res, error.statusCode || 500, error.message || "Unable to record deposit");
@@ -99,6 +104,14 @@ async function createBalancePayment(req, res) {
       };
       await commitment.save({ session });
     });
+    // Ledger entry only; this does not transfer funds to a bank account.
+    if (commitment.settlement?.farmerAmount > 0) {
+      await FarmerPayout.findOneAndUpdate(
+        { commitment: commitment._id },
+        { $setOnInsert: { commitment: commitment._id, farmer: commitment.lot ? (await ProduceLot.findById(commitment.lot).select("farmer")).farmer : null, amount: commitment.settlement.farmerAmount, currency: "INR", status: "pending", sourcePayment: payment._id } },
+        { upsert: true, new: true, runValidators: true }
+      );
+    }
     const blockchain = await recordBlockchainAnchor({ entityType: "payment", entityId: payment._id, eventType: "BALANCE_PAYMENT_RECORDED", payload: { paymentId: String(payment._id), commitmentId: String(commitment._id), amount: payment.amount, currency: payment.currency, paymentStatus: payment.status, commitmentStatus: commitment.status, paymentMethod: "demo" }, recordedBy: req.user._id });
     try { if (blockchain.anchor?.transactionHash) { payment.blockchainTxHash = blockchain.anchor.transactionHash; await payment.save(); } }
     catch (metadataError) { console.error("Could not persist balance proof metadata:", metadataError.message); }

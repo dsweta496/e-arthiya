@@ -1,0 +1,1 @@
+const express=require("express"); const {protect,authorizeRoles}=require("../middleware/auth.middleware"); const {getPayouts,updatePayoutStatus}=require("../controllers/payout.controller"); const router=express.Router(); router.get("/",protect,getPayouts); router.patch("/:id",protect,authorizeRoles("admin"),updatePayoutStatus); module.exports=router;

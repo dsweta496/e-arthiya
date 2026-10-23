@@ -118,6 +118,22 @@ const getExternalOffers = async (req, res) => {
   }
 };
 
+const rejectExternalOffer = async (req, res) => {
+  try {
+    const { id: auctionId, offerId } = req.params;
+    const auction = await Auction.findById(auctionId).populate("lot");
+    if (!auction) return res.status(404).json({ success: false, message: "Auction not found" });
+    if (!auction.lot || auction.lot.farmer.toString() !== req.user._id.toString()) return res.status(403).json({ success: false, message: "Only the farmer who owns this lot can reject its external offers" });
+    if (auction.status !== "open") return res.status(409).json({ success: false, message: "Offers can only be rejected while the auction is open" });
+    const offer = await ExternalOffer.findOne({ _id: offerId, auction: auction._id });
+    if (!offer) return res.status(404).json({ success: false, message: "External offer not found for this auction" });
+    if (offer.status !== "recorded") return res.status(409).json({ success: false, message: "Only recorded offers can be rejected" });
+    offer.status = "rejected";
+    await offer.save();
+    return res.json({ success: true, message: "External offer rejected", data: offer });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message || "Unable to reject external offer" }); }
+};
+
 const selectExternalOffer = async (req, res) => {
   try {
     const { id: auctionId, offerId } = req.params;
@@ -203,4 +219,5 @@ module.exports = {
   createExternalOffer,
   getExternalOffers,
   selectExternalOffer,
+  rejectExternalOffer,
 };

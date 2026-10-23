@@ -5,6 +5,8 @@ const {
   getAuctions,
   getAuctionById,
   closeAuction,
+  updateAuction,
+  cancelAuction,
 } = require("../controllers/auction.controller");
 
 const {
@@ -16,10 +18,12 @@ const {
   createExternalOffer,
   getExternalOffers,
   selectExternalOffer,
+  rejectExternalOffer,
 } = require("../controllers/externalOffer.controller");
 
 const {
   createCommitment,
+  approveCommitmentAfterDeposit,
 } = require("../controllers/commitment.controller");
 
 const {
@@ -50,6 +54,9 @@ router.get(
   protect,
   getAuctionById
 );
+
+router.patch("/:id", protect, authorizeRoles("farmer", "fpo", "arthiya"), requireVerifiedOrganization, updateAuction);
+router.post("/:id/cancel", protect, authorizeRoles("farmer", "fpo", "arthiya"), requireVerifiedOrganization, cancelAuction);
 
 router.post(
   "/:id/close",
@@ -85,6 +92,13 @@ router.get(
   "/:id/external-offers",
   protect,
   getExternalOffers
+);
+
+router.post(
+  "/:id/external-offers/:offerId/reject",
+  protect,
+  authorizeRoles("farmer"),
+  rejectExternalOffer
 );
 
 router.post(

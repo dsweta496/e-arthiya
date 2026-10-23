@@ -54,6 +54,7 @@ const allocationSchema = new mongoose.Schema(
         "fulfilled",
         "released",
         "cancelled",
+        "rejected",
       ],
       default: "proposed",
     },

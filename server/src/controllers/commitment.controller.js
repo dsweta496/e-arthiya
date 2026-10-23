@@ -11,6 +11,8 @@ const ExternalOffer =
 
 const ProduceLot =
   require("../models/ProduceLot");
+const Notification = require("../models/Notification");
+const Allocation = require("../models/Allocation");
 
 const createCommitment = async (req, res) => {
   try {
@@ -198,8 +200,8 @@ const cancelCommitment = async (req, res) => {
     if (!commitment.buyer || commitment.buyer.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: "Only the buyer who owns this commitment can withdraw it" });
     }
-    if (!["pending_deposit", "confirmed", "active"].includes(commitment.status)) {
-      return res.status(409).json({ success: false, message: `Commitment cannot be withdrawn from status '${commitment.status}'` });
+    if (commitment.status !== "pending_deposit") {
+      return res.status(409).json({ success: false, message: "Withdrawal is only allowed before the security deposit. After deposit, contact admin for review." });
     }
 
     const previousStatus = commitment.status;
@@ -234,6 +236,28 @@ const cancelCommitment = async (req, res) => {
   }
 };
 
+
+const approveCommitmentAfterDeposit = async (req, res) => {
+  try {
+    const commitment = await PurchaseCommitment.findById(req.params.id);
+    if (!commitment) return res.status(404).json({ success: false, message: "Purchase commitment not found" });
+    let lot = commitment.lot ? await ProduceLot.findById(commitment.lot) : null;
+    let farmerId = lot?.farmer;
+    if (!farmerId && commitment.supplyIntent) farmerId = (await require("../models/SupplyIntent").findById(commitment.supplyIntent).select("farmer"))?.farmer;
+    if (!farmerId && commitment.supplyPool) {
+      const pool = await require("../models/SupplyPool").findById(commitment.supplyPool).select("aggregator");
+      farmerId = pool?.aggregator;
+    }
+    if (req.user.role !== "admin" && (!farmerId || String(farmerId) !== String(req.user._id))) return res.status(403).json({ success: false, message: "Only the supplying farmer (or admin) can approve this commitment" });
+    if (commitment.status !== "pending_farmer_approval") return res.status(409).json({ success: false, message: "Commitment is not awaiting farmer approval" });
+    commitment.status = "confirmed";
+    await commitment.save();
+    if (lot) { lot.status = "committed"; await lot.save(); }
+    await Notification.create({ recipient: commitment.buyer, type: "commitment_approved", title: "Commitment approved", message: "The supplying farmer approved your commitment after deposit.", entityType: "commitment", entityId: String(commitment._id) });
+    const blockchain = await recordBlockchainAnchor({ entityType: "commitment", entityId: commitment._id, eventType: "COMMITMENT_CONFIRMED", payload: { commitmentId: String(commitment._id), status: commitment.status }, recordedBy: req.user._id });
+    return res.json({ success: true, message: "Commitment approved", data: commitment, blockchain });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message || "Unable to approve commitment" }); }
+};
 
 const getCommitmentById = async (req, res) => {
   try {
@@ -434,6 +458,7 @@ const getCommitments = async (req, res) => {
 module.exports = {
   createCommitment,
   cancelCommitment,
+  approveCommitmentAfterDeposit,
   getCommitmentById,
   getCommitments,
 };

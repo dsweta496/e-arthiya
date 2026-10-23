@@ -1,5 +1,7 @@
 const ProduceLot = require("../models/ProduceLot");
 const User = require("../models/User");
+const Allocation = require("../models/Allocation");
+const Auction = require("../models/Auction");
 
 const createLot = async (req, res) => {
   try {
@@ -183,7 +185,6 @@ const updateLot = async (req, res) => {
       "qualityGrade",
       "location",
       "images",
-      "status",
       "aggregatorType",
       "aggregator",
       "availableFrom",
@@ -207,6 +208,13 @@ const updateLot = async (req, res) => {
     }
 
     const userId = req.user._id.toString();
+
+    // Listing details are editable only before any reservation/commitment or active auction.
+    const activeAllocation = await Allocation.exists({ sourceType: "lot", sourceId: existingLot._id, status: { $in: ["reserved", "committed", "fulfilled"] } });
+    const activeAuction = await Auction.exists({ lot: existingLot._id, status: { $in: ["open", "closed_platform_winner", "closed_external_offer"] } });
+    if (activeAllocation || activeAuction || ["reserved", "committed", "sold", "cancelled"].includes(existingLot.status)) {
+      return res.status(409).json({ success: false, message: "This listing can only be edited before reservation or auction activity." });
+    }
 
     if (req.user.role === "farmer") {
       if (existingLot.farmer.toString() !== userId) {

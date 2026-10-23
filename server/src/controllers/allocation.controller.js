@@ -4,6 +4,7 @@ const Allocation = require("../models/Allocation");
 const ProcurementRequest = require("../models/ProcurementRequest");
 const ProduceLot = require("../models/ProduceLot");
 const SupplyIntent = require("../models/SupplyIntent");
+const Notification = require("../models/Notification");
 const {
   createAllocation,
   approveAllocation,
@@ -114,6 +115,23 @@ const acceptFarmerOfferController = async (req, res) => {
   } catch (error) { return sendError(res, error, 400); }
 };
 
+const rejectAllocationController = async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) throw httpError("Invalid allocation ID", 400);
+    const allocation = await Allocation.findById(req.params.id);
+    if (!allocation) throw httpError("Allocation not found", 404);
+    if (allocation.status !== "proposed") throw httpError("Only proposed allocations can be rejected", 409);
+    const source = await getAllocationSource(allocation);
+    const isBuyer = req.user.role === "buyer" && allocation.initiatedBy === "farmer" && (await assertBuyerOwnsRequest(req, allocation.procurementRequest));
+    if (!isBuyer) await assertCanManageSource(req, source);
+    allocation.status = "rejected";
+    await allocation.save();
+    const recipient = isBuyer ? allocation.farmer : (await ProcurementRequest.findById(allocation.procurementRequest).select("buyer"))?.buyer;
+    if (recipient) await Notification.create({ recipient, type: "allocation_rejected", title: "Allocation proposal rejected", message: "An allocation proposal was rejected.", entityType: "allocation", entityId: String(allocation._id) });
+    return res.json({ success: true, message: "Allocation rejected and the other party notified", allocation });
+  } catch (error) { return sendError(res, error, 400); }
+};
+
 const getAllocations = async (req, res) => {
   try {
     const filter = {};
@@ -157,7 +175,7 @@ const getAllocations = async (req, res) => {
       filter.sourceId = req.query.sourceId;
     }
     if (req.query.status) {
-      const allowed = ["proposed", "reserved", "committed", "fulfilled", "released", "cancelled"];
+      const allowed = ["proposed", "reserved", "committed", "fulfilled", "released", "cancelled", "rejected"];
       if (!allowed.includes(req.query.status)) throw httpError("Invalid allocation status", 400);
       filter.status = req.query.status;
     }
@@ -234,6 +252,7 @@ const fulfillAllocationController = async (req, res) => {
 module.exports = {
   createAllocationController,
   approveAllocationController,
+  rejectAllocationController,
   acceptFarmerOfferController,
   getAllocations,
   getAllocationById,

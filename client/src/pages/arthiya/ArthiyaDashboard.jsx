@@ -67,6 +67,11 @@ function ArthiyaDashboard({ user = null }) {
 
   return (
     <div className="space-y-7">
+      <div className="flex justify-end">
+        <Link to="/arthiya/operations" className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50">
+          Open operations centre <span aria-hidden="true">↗</span>
+        </Link>
+      </div>
       <section className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2">

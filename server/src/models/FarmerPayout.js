@@ -1,0 +1,4 @@
+const mongoose = require("mongoose");
+const schema = new mongoose.Schema({ commitment: { type: mongoose.Schema.Types.ObjectId, ref: "PurchaseCommitment", required: true, unique: true }, farmer: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, amount: { type: Number, required: true, min: 0 }, currency: { type: String, default: "INR" }, status: { type: String, enum: ["pending", "reviewed", "paid_recorded", "cancelled"], default: "pending" }, sourcePayment: { type: mongoose.Schema.Types.ObjectId, ref: "PaymentTransaction", required: true }, adminNote: { type: String, maxlength: 500, default: null }, reviewedAt: { type: Date, default: null } }, { timestamps: true });
+schema.index({ farmer: 1, status: 1, createdAt: -1 });
+module.exports = mongoose.model("FarmerPayout", schema);

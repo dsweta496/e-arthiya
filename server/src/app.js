@@ -18,6 +18,8 @@ const allocationRoutes = require("./routes/allocation.routes");
 const matchingRoutes = require("./routes/matching.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const blockchainRoutes = require("./routes/blockchain.routes");
+const notificationRoutes = require("./routes/notification.routes");
+const payoutRoutes = require("./routes/payout.routes");
 
 const app = express();
 
@@ -25,6 +27,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/users", userRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/payouts", payoutRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/allocations", allocationRoutes);
 app.use("/api/payments", paymentRoutes);

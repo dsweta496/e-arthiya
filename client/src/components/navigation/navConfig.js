@@ -59,6 +59,11 @@ const navConfig = {
               icon: "grid",
             },
             {
+              label: "Operations Centre",
+              path: "/farmer/operations",
+              icon: "grid",
+            },
+            {
               label: "My Supply",
               path: "/farmer/supply",
               icon: "package",
@@ -124,6 +129,11 @@ const navConfig = {
             {
               label: "Overview",
               path: "/buyer",
+              icon: "grid",
+            },
+            {
+              label: "Operations Centre",
+              path: "/buyer/operations",
               icon: "grid",
             },
             {
@@ -200,6 +210,11 @@ const navConfig = {
               icon: "grid",
             },
             {
+              label: "Operations Centre",
+              path: "/fpo/operations",
+              icon: "grid",
+            },
+            {
               label: "Farmers",
               path: "/fpo/farmers",
               icon: "users",
@@ -270,6 +285,11 @@ const navConfig = {
             {
               label: "Overview",
               path: "/arthiya",
+              icon: "grid",
+            },
+            {
+              label: "Operations Centre",
+              path: "/arthiya/operations",
               icon: "grid",
             },
             {

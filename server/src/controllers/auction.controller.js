@@ -2,6 +2,7 @@ const { recordBlockchainAnchor } = require("../services/blockchainAnchor.service
 const Auction = require("../models/Auction");
 const ProduceLot = require("../models/ProduceLot");
 const Bid = require("../models/Bid");
+const ExternalOffer = require("../models/ExternalOffer");
 const { getAvailableQuantity } = require("../services/allocation.service");
 
 function canManageLot(user, lot) {
@@ -204,6 +205,46 @@ const getAuctionById = async (req, res) => {
   }
 };
 
+const updateAuction = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id).populate("lot");
+    if (!auction) return res.status(404).json({ success: false, message: "Auction not found" });
+    if (!canManageLot(req.user, auction.lot)) return res.status(403).json({ success: false, message: "You are not authorized to edit this auction" });
+    if (auction.status !== "open") return res.status(409).json({ success: false, message: "Only open auctions can be edited" });
+    const [bid, offer] = await Promise.all([Bid.exists({ auction: auction._id }), ExternalOffer.exists({ auction: auction._id })]);
+    if (bid || offer) return res.status(409).json({ success: false, message: "Auction cannot be edited after the first bid or external offer" });
+    const allowed = ["startTime", "endTime", "startingPrice"];
+    const updates = {};
+    for (const key of allowed) if (req.body[key] !== undefined) updates[key] = req.body[key];
+    if (!Object.keys(updates).length) return res.status(400).json({ success: false, message: "No editable auction fields supplied" });
+    if (updates.startTime) updates.startTime = new Date(updates.startTime);
+    if (updates.endTime) updates.endTime = new Date(updates.endTime);
+    const start = updates.startTime || auction.startTime, end = updates.endTime || auction.endTime;
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return res.status(400).json({ success: false, message: "Valid dates are required and end time must be after start time" });
+    if (updates.startingPrice !== undefined && (!Number.isFinite(Number(updates.startingPrice)) || Number(updates.startingPrice) < 0)) return res.status(400).json({ success: false, message: "Starting price must be non-negative" });
+    Object.assign(auction, updates);
+    if (updates.startingPrice !== undefined) auction.currentHighestBid = Number(updates.startingPrice);
+    await auction.save();
+    return res.json({ success: true, message: "Auction updated", data: auction });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message || "Unable to update auction" }); }
+};
+
+const cancelAuction = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id).populate("lot");
+    if (!auction) return res.status(404).json({ success: false, message: "Auction not found" });
+    if (!canManageLot(req.user, auction.lot)) return res.status(403).json({ success: false, message: "You are not authorized to cancel this auction" });
+    if (auction.status !== "open") return res.status(409).json({ success: false, message: "Only open auctions can be cancelled" });
+    const [bid, offer] = await Promise.all([Bid.exists({ auction: auction._id }), ExternalOffer.exists({ auction: auction._id })]);
+    if (bid || offer) return res.status(409).json({ success: false, message: "Auction cannot be cancelled after the first bid or external offer" });
+    auction.status = "cancelled";
+    await auction.save();
+    if (auction.lot && auction.lot.status === "in_auction") { auction.lot.status = "available"; await auction.lot.save(); }
+    const blockchain = await recordBlockchainAnchor({ entityType: "auction", entityId: auction._id, eventType: "AUCTION_CANCELLED", payload: { auctionId: String(auction._id), status: auction.status }, recordedBy: req.user._id });
+    return res.json({ success: true, message: "Auction cancelled", data: auction, blockchain });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message || "Unable to cancel auction" }); }
+};
+
 const closeAuction = async (req, res) => {
   try {
     const { result } = req.body;
@@ -301,4 +342,6 @@ module.exports = {
   getAuctions,
   getAuctionById,
   closeAuction,
+  updateAuction,
+  cancelAuction,
 };

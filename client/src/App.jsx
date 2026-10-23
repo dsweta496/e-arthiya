@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 
 import Landing from "./pages/Landing";
+import OperationsHub from "./pages/OperationsHub";
 import Marketplace from "./pages/Marketplace";
 import Signup from "./pages/auth/Signup";
 
@@ -14,6 +15,7 @@ import FarmerLayout from "./layouts/FarmerLayout";
 import BuyerLayout from "./layouts/BuyerLayout";
 import FPOLayout from "./layouts/FPOLayout";
 import ArthiyaLayout from "./layouts/ArthiyaLayout";
+import AdminLayout from "./layouts/AdminLayout";
 
 import FarmerDashboard from "./pages/farmer/FarmerDashboard";
 import FarmerSupply from "./pages/farmer/FarmerSupply";
@@ -66,6 +68,7 @@ const ROLE_HOME = {
   buyer: "/buyer",
   fpo: "/fpo",
   arthiya: "/arthiya",
+  admin: "/admin/operations",
 };
 
 function ProtectedRoute({ user, allowedRole, children }) {
@@ -549,6 +552,13 @@ function App() {
           </ProtectedRoute>
         } />
 
+
+        {/* Role-based operations centre for checklist workflows */}
+        <Route path="/farmer/operations" element={<ProtectedRoute user={user} allowedRole="farmer"><FarmerLayout user={user}><OperationsHub user={user} /></FarmerLayout></ProtectedRoute>} />
+        <Route path="/buyer/operations" element={<ProtectedRoute user={user} allowedRole="buyer"><BuyerLayout user={user}><OperationsHub user={user} /></BuyerLayout></ProtectedRoute>} />
+        <Route path="/fpo/operations" element={<ProtectedRoute user={user} allowedRole="fpo"><FPOLayout user={user}><OperationsHub user={user} /></FPOLayout></ProtectedRoute>} />
+        <Route path="/arthiya/operations" element={<ProtectedRoute user={user} allowedRole="arthiya"><ArthiyaLayout user={user}><OperationsHub user={user} /></ArthiyaLayout></ProtectedRoute>} />
+        <Route path="/admin/operations" element={<ProtectedRoute user={user} allowedRole="admin"><AdminLayout user={user}><OperationsHub user={user} /></AdminLayout></ProtectedRoute>} />
 
         {/* =========================
             FALLBACK

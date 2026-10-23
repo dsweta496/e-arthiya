@@ -1,10 +1,9 @@
 const express = require("express");
-const { anchorTradeEventController, getAnchorStatusController, getEntityAnchorsController, retryAnchorController } = require("../controllers/blockchain.controller");
 const { protect, authorizeRoles } = require("../middleware/auth.middleware");
+const { cancelCommitment, getCommitmentById, getCommitments, approveCommitmentAfterDeposit } = require("../controllers/commitment.controller");
 const router = express.Router();
-// Manual anchor is admin-only. Business-event anchors are created server-side after state changes.
-router.post("/anchor", protect, authorizeRoles("admin"), anchorTradeEventController);
-router.get("/status/:eventId", protect, authorizeRoles("admin"), getAnchorStatusController);
-router.get("/anchors/:entityType/:entityId", protect, getEntityAnchorsController);
-router.post("/anchors/:id/retry", protect, authorizeRoles("admin"), retryAnchorController);
+router.get("/", protect, getCommitments);
+router.get("/:id", protect, getCommitmentById);
+router.post("/:id/withdraw", protect, authorizeRoles("buyer"), cancelCommitment);
+router.post("/:id/approve", protect, authorizeRoles("farmer", "admin"), approveCommitmentAfterDeposit);
 module.exports = router;

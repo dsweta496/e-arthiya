@@ -92,6 +92,18 @@ export async function getFarmerDemandMatches(procurementRequestId) {
   return apiRequest(`/matching/${procurementRequestId}`);
 }
 
+export async function createFarmerOffer(procurementRequestId, payload) {
+  return apiRequest(`/matching/${procurementRequestId}/farmer-offer`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function acceptFarmerOffer(allocationId) {
+  return apiRequest(`/allocations/${allocationId}/accept-offer`, { method: "PATCH" });
+}
+
+
 // ================================
 // AUCTIONS
 // ================================

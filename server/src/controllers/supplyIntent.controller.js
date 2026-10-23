@@ -1,5 +1,6 @@
 const SupplyIntent = require("../models/SupplyIntent");
 const User = require("../models/User");
+const Allocation = require("../models/Allocation");
 
 const createSupplyIntent = async (req, res) => {
   try {
@@ -259,7 +260,6 @@ const updateSupplyIntent = async (
       "location",
       "aggregatorType",
       "aggregator",
-      "status",
     ];
 
     const updates = {};
@@ -287,6 +287,11 @@ const updateSupplyIntent = async (
         success: false,
         message: "Supply intent not found",
       });
+    }
+
+    const activeAllocation = await Allocation.exists({ sourceType: "supply_intent", sourceId: existingIntent._id, status: { $in: ["reserved", "committed", "fulfilled"] } });
+    if (activeAllocation || ["committed", "converted", "cancelled"].includes(existingIntent.status)) {
+      return res.status(409).json({ success: false, message: "This supply intent can only be edited before reservation or commitment." });
     }
 
     if (req.user.role === "farmer" && existingIntent.farmer.toString() !== req.user._id.toString()) {

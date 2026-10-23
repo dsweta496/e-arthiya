@@ -113,6 +113,7 @@ const purchaseCommitmentSchema = new mongoose.Schema(
         "created",
         "pending_deposit",
         "confirmed",
+        "pending_farmer_approval",
         "active",
         "fulfilled",
         "settled",
