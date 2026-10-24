@@ -45,7 +45,7 @@ function FarmerDashboard({ user = null }) {
     }, [farmerId]);
     const available = useMemo(() => lots.filter((lot) => lot.status === "available").reduce((sum, lot) => sum + Number(lot.quantity || 0), 0), [lots]);
     const marketValue = useMemo(() => lots.filter((lot) => lot.status === "available").reduce((sum, lot) => sum + Number(lot.quantity || 0) * Number(lot.expectedPrice || 0), 0), [lots]);
-    const activeCommitments = commitments.filter((item) => ["created", "pending_deposit", "confirmed", "active"].includes(item.status)).length;
+    const activeCommitments = commitments.filter((item) => ["created", "pending_deposit", "pending_farmer_approval", "confirmed", "active"].includes(item.status)).length;
     const recentSupply = [
         ...lots.map((lot) => ({ ...lot, kind: "Spot", quantity: lot.quantity, date: lot.availableFrom || lot.createdAt })),
         ...intents.map((intent) => ({ ...intent, kind: "Future", quantity: intent.expectedQuantity, date: intent.expectedHarvestDate })),

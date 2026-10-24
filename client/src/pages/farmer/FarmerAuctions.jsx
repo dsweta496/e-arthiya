@@ -210,7 +210,7 @@ function AuctionCard({ auction, busy, offers, onLoadOffers, offerForm, onOfferCh
   const expired = isOpen && new Date(auction.endTime).getTime() <= Date.now();
   return <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold text-slate-950">{lot.crop || "Produce lot"}</h2><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${expired ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{expired ? "ended · no close recorded" : auction.status?.replaceAll("_", " ") || "unknown"}</span></div>
+      <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold text-slate-950">{lot.crop || "Produce lot"}</h2><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${expired ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{expired ? "ended · no close recorded" : ["closed_platform_winner", "closed_external_offer"].includes(auction.status) ? `Reserved · ${auction.status === "closed_platform_winner" ? "platform winner" : "external offer"}` : auction.status?.replaceAll("_", " ") || "unknown"}</span></div>
         <p className="mt-1 text-xs text-slate-400">{lot.quantity ? `${formatNumber(lot.quantity)} ${lot.unit}` : "Quantity unavailable"} · {formatDateTime(auction.startTime)} → {formatDateTime(auction.endTime)}</p>
       </div><div className="text-left lg:text-right"><p className="text-xs text-slate-400">Current highest bid</p><p className="text-xl font-bold text-emerald-800">₹{formatNumber(auction.currentHighestBid)}</p></div>
     </div>

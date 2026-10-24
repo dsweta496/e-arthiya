@@ -120,7 +120,7 @@ export default function FarmerSupply({ user = null }) {
       <div className="flex flex-wrap gap-2"><button onClick={() => openCreate("future")} className="rounded-xl border border-emerald-800 px-4 py-3 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-50">+ Future intent</button><button onClick={() => openCreate("spot")} className="rounded-xl bg-emerald-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-950">+ Add spot supply</button></div>
     </header>
     {error && !modal && <Alert type="error" text={error} />}{notice && <Alert text={notice} />}
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="Active spot listings" value={spotRecords.length}/><Stat label="Future intents" value={futureRecords.length}/><Stat label="Available now" value={spotRecords.filter((x) => x.status === "available").length}/><Stat label="Reserved or committed" value={[...spotRecords, ...futureRecords].filter((x) => ["reserved", "committed", "in_auction"].includes(x.status)).length}/></div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="Spot supply records" value={spotRecords.length}/><Stat label="Future intents" value={futureRecords.length}/><Stat label="Available now" value={spotRecords.filter((x) => x.status === "available").length}/><Stat label="Reserved or committed" value={[...spotRecords, ...futureRecords].filter((x) => ["reserved", "committed", "in_auction"].includes(x.status)).length}/></div>
 
     {/* Search stays above the full-width supply switch. */}
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -309,7 +309,7 @@ function FutureRow({ item, onEdit, onViewProposals, proposalCount = 0 }) {
       </div>
       <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 md:hidden">Expected quantity</p><p className="text-sm font-semibold text-slate-700">{fmt(item.expectedQuantity)} {item.unit || "units"}</p></div>
       <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 md:hidden">Expected harvest</p><p className="text-sm font-semibold text-slate-700">{date(item.expectedHarvestDate)}</p></div>
-      <div><span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-800">{label(item.status)}</span></div>
+      <div><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${["reserved", "committed", "fulfilled"].includes(String(item.status || "").toLowerCase()) ? "bg-emerald-50 text-emerald-800" : ["cancelled", "converted"].includes(String(item.status || "").toLowerCase()) ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-800"}`}>{label(item.status)}</span></div>
       <div className="flex flex-wrap gap-2 md:flex-col md:items-stretch">
         <button onClick={onEdit} disabled={!canEdit} title={!canEdit ? "Editing is disabled for this status" : "View or edit future intent"} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-40">{canEdit ? "View / edit" : "View only"}</button>
         <button type="button" onClick={onViewProposals} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900 transition hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100">

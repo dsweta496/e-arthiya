@@ -89,6 +89,12 @@ function ArthiyaPools() {
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-800">{pool.status}</span>
               </div>
 
+              {pool.status !== "cancelled" && (
+                <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800">
+                  Contributor supply reserved
+                </p>
+              )}
+
               <div className="mt-5 grid grid-cols-2 gap-4">
                 <Detail label="Total quantity" value={`${formatNumber(pool.totalQuantity)} ${pool.unit}`} />
                 <Detail label="Contributors" value={pool.contributors?.length || 0} />

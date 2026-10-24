@@ -70,6 +70,7 @@ const supplyIntentSchema = new mongoose.Schema(
       enum: [
         "draft",
         "available",
+        "reserved",
         "committed",
         "converted",
         "cancelled",

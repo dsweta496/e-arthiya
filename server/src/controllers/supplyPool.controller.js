@@ -178,6 +178,21 @@ const createSupplyPool = async (req, res) => {
       0
     );
 
+    // A created aggregation claims its listed contributor supply so it cannot
+    // simultaneously remain available for direct matching or auctioning.
+    // Reject duplicate source entries so the same produce cannot be counted twice.
+    const uniqueSources = new Set();
+    for (const contributor of validatedContributors) {
+      const key = `${contributor.sourceType}:${String(contributor.sourceId)}`;
+      if (uniqueSources.has(key)) {
+        return res.status(409).json({
+          success: false,
+          message: "The same supply source cannot be added to an aggregation more than once",
+        });
+      }
+      uniqueSources.add(key);
+    }
+
     const supplyPool = await SupplyPool.create({
       crop,
       variety,
@@ -191,6 +206,23 @@ const createSupplyPool = async (req, res) => {
       procurementRequests: [],
       status: "forming",
     });
+
+    // Mark each contributing source as reserved after the pool is persisted.
+    // The farmer's listing shows Reserved; pool status remains "forming" until
+    // the aggregator's workflow advances it.
+    for (const contributor of validatedContributors) {
+      if (contributor.sourceType === "lot") {
+        await ProduceLot.findOneAndUpdate(
+          { _id: contributor.sourceId, status: "available" },
+          { $set: { status: "reserved" } }
+        );
+      } else if (contributor.sourceType === "supply_intent") {
+        await SupplyIntent.findOneAndUpdate(
+          { _id: contributor.sourceId, status: "available" },
+          { $set: { status: "reserved" } }
+        );
+      }
+    }
 
     return res.status(201).json({
       success: true,

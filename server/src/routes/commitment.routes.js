@@ -1,8 +1,9 @@
 const express = require("express");
 const { protect, authorizeRoles } = require("../middleware/auth.middleware");
-const { cancelCommitment, getCommitmentById, getCommitments, approveCommitmentAfterDeposit } = require("../controllers/commitment.controller");
+const { cancelCommitment, getCommitmentById, getCommitments, approveCommitmentAfterDeposit, createCommitmentFromReservedSupply } = require("../controllers/commitment.controller");
 const router = express.Router();
 router.get("/", protect, getCommitments);
+router.post("/from-reserved", protect, authorizeRoles("farmer"), createCommitmentFromReservedSupply);
 router.get("/:id", protect, getCommitmentById);
 router.post("/:id/withdraw", protect, authorizeRoles("buyer"), cancelCommitment);
 router.post("/:id/approve", protect, authorizeRoles("farmer", "admin"), approveCommitmentAfterDeposit);

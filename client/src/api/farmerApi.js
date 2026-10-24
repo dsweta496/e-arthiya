@@ -218,3 +218,12 @@ export async function updateFarmerAuction(auctionId, payload) {
 export async function getAuctionBlockchainProofs(auctionId) {
   return apiRequest(`/blockchain/anchors/auction/${auctionId}`);
 }
+
+
+// Farmer-confirmed reserved supply -> purchase commitment (MVP manual receipt declaration).
+export async function createCommitmentFromReservedSupply(payload) {
+  return apiRequest("/commitments/from-reserved", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

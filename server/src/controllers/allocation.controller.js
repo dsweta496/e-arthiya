@@ -97,7 +97,14 @@ const approveAllocationController = async (req, res) => {
     const source = await getAllocationSource(allocation);
     await assertCanManageSource(req, source);
     const updated = await approveAllocation(req.params.id);
-    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RESERVED", payload: { allocationId: String(updated._id), sourceType: updated.sourceType, sourceId: String(updated.sourceId), quantity: updated.allocatedQuantity, unit: updated.unit, status: updated.status }, recordedBy: req.user._id });
+    // Keep the source listing in sync with its accepted proposal. A reserved
+    // source is no longer advertised as freely available or eligible for auction.
+    const approvedSource = await getAllocationSource(updated);
+    if (approvedSource) {
+      approvedSource.status = "reserved";
+      await approvedSource.save();
+    }
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RESERVED", payload: { allocationId: String(updated._id), sourceType: updated.sourceType, sourceId: String(updated.sourceId), quantity: updated.allocatedQuantity, unit: updated.unit, status: updated.status, sourceStatus: approvedSource?.status || "reserved" }, recordedBy: req.user._id });
     return res.status(200).json({ success: true, message: "Allocation approved and quantity reserved", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };
@@ -110,7 +117,14 @@ const acceptFarmerOfferController = async (req, res) => {
     if ((allocation.initiatedBy || "buyer") !== "farmer") throw httpError("This allocation is not a farmer-originated offer", 409);
     if (req.user.role !== "admin") await assertBuyerOwnsRequest(req, allocation.procurementRequest);
     const updated = await approveAllocation(req.params.id);
-    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RESERVED", payload: { allocationId: String(updated._id), sourceType: updated.sourceType, sourceId: String(updated.sourceId), quantity: updated.allocatedQuantity, unit: updated.unit, status: updated.status }, recordedBy: req.user._id });
+    // Keep the source listing in sync with its accepted proposal. A reserved
+    // source is no longer advertised as freely available or eligible for auction.
+    const approvedSource = await getAllocationSource(updated);
+    if (approvedSource) {
+      approvedSource.status = "reserved";
+      await approvedSource.save();
+    }
+    const blockchain = await recordBlockchainAnchor({ entityType: "allocation", entityId: updated._id, eventType: "ALLOCATION_RESERVED", payload: { allocationId: String(updated._id), sourceType: updated.sourceType, sourceId: String(updated.sourceId), quantity: updated.allocatedQuantity, unit: updated.unit, status: updated.status, sourceStatus: approvedSource?.status || "reserved" }, recordedBy: req.user._id });
     return res.status(200).json({ success: true, message: "Farmer offer accepted and quantity reserved", allocation: updated, blockchain });
   } catch (error) { return sendError(res, error, 400); }
 };

@@ -40,6 +40,12 @@ function FPOPools({ user = null }) {
                 </span>
               </div>
 
+              {pool.status !== "cancelled" && (
+                <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-800">
+                  Contributor supply reserved
+                </p>
+              )}
+
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <Metric label="Total quantity" value={`${pool.totalQuantity} ${pool.unit}`} />
                 <Metric label="Farmers" value={pool.contributors?.length || 0} />
