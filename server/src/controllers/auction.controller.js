@@ -3,6 +3,7 @@ const Auction = require("../models/Auction");
 const ProduceLot = require("../models/ProduceLot");
 const Bid = require("../models/Bid");
 const ExternalOffer = require("../models/ExternalOffer");
+const Allocation = require("../models/Allocation");
 const { getAvailableQuantity } = require("../services/allocation.service");
 
 function canManageLot(user, lot) {
@@ -48,10 +49,25 @@ const createAuction = async (req, res) => {
       });
     }
 
-    if (["reserved", "committed", "sold", "cancelled"].includes(lotData.status)) {
+    if (lotData.status !== "available") {
       return res.status(400).json({
         success: false,
-        message: "This lot is no longer available",
+        message: "Only an available lot can be auctioned",
+      });
+    }
+
+    // A lot cannot be listed in an auction while a buyer proposal or
+    // quantity-consuming allocation is attached to it. This prevents the
+    // same produce being promised through two competing workflows.
+    const activeAllocation = await Allocation.exists({
+      sourceType: "lot",
+      sourceId: lotData._id,
+      status: { $in: ["proposed", "reserved", "committed", "fulfilled"] },
+    });
+    if (activeAllocation) {
+      return res.status(409).json({
+        success: false,
+        message: "This lot has a buyer proposal or active allocation. Resolve it before creating an auction.",
       });
     }
 
@@ -221,6 +237,7 @@ const updateAuction = async (req, res) => {
     if (updates.endTime) updates.endTime = new Date(updates.endTime);
     const start = updates.startTime || auction.startTime, end = updates.endTime || auction.endTime;
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return res.status(400).json({ success: false, message: "Valid dates are required and end time must be after start time" });
+    if (end <= new Date()) return res.status(400).json({ success: false, message: "The auction end time must be in the future. Extend the end date to reopen an expired auction." });
     if (updates.startingPrice !== undefined && (!Number.isFinite(Number(updates.startingPrice)) || Number(updates.startingPrice) < 0)) return res.status(400).json({ success: false, message: "Starting price must be non-negative" });
     Object.assign(auction, updates);
     if (updates.startingPrice !== undefined) auction.currentHighestBid = Number(updates.startingPrice);

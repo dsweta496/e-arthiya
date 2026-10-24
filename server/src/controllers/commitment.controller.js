@@ -117,6 +117,7 @@ const createCommitment = async (req, res) => {
           100,
 
         status: "pending_deposit",
+        commitmentWindowEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       };
     }
 
@@ -169,6 +170,7 @@ const createCommitment = async (req, res) => {
           100,
 
         status: "pending_deposit",
+        commitmentWindowEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       };
 
       offer.status = "selected";
@@ -259,6 +261,29 @@ const approveCommitmentAfterDeposit = async (req, res) => {
   } catch (error) { return res.status(500).json({ success: false, message: error.message || "Unable to approve commitment" }); }
 };
 
+// Farmers must see only their own contribution when a commitment is backed by an aggregated pool.
+function farmerSafeCommitment(commitment, farmerId) {
+  const raw = commitment?.toObject ? commitment.toObject() : { ...commitment };
+  const pool = raw.supplyPool;
+  if (!pool || !Array.isArray(pool.contributors)) return raw;
+  const ownId = String(farmerId);
+  const own = pool.contributors.find((c) => String(c.farmer?._id || c.farmer) === ownId);
+  if (!own) return raw;
+  const shareQuantity = Number(own.quantity || 0);
+  const parentTotal = Number(pool.totalQuantity || raw.quantity || 0);
+  const ratio = parentTotal > 0 ? Math.min(1, shareQuantity / parentTotal) : 0;
+  raw.quantity = shareQuantity;
+  raw.depositAmount = Number((Number(raw.depositAmount || 0) * ratio).toFixed(2));
+  if (raw.settlement && typeof raw.settlement === "object") {
+    for (const key of ["cropValue", "farmerAmount", "serviceFee", "facilitatorCommission", "platformFee", "depositApplied"]) {
+      if (raw.settlement[key] != null) raw.settlement[key] = Number((Number(raw.settlement[key]) * ratio).toFixed(2));
+    }
+  }
+  raw.supplyPool = { _id: pool._id, crop: pool.crop, variety: pool.variety, unit: pool.unit, totalQuantity: shareQuantity, status: pool.status, contributors: [{ farmer: own.farmer?._id || own.farmer, quantity: shareQuantity, sourceType: own.sourceType, sourceId: own.sourceId }] };
+  raw.farmerShareView = true;
+  return raw;
+}
+
 const getCommitmentById = async (req, res) => {
   try {
     const commitment = await PurchaseCommitment.findById(
@@ -282,10 +307,10 @@ const getCommitmentById = async (req, res) => {
       })
       .populate({
         path: "supplyPool",
-        populate: {
-          path: "aggregator",
-          select: "name phone role",
-        },
+        populate: [
+          { path: "aggregator", select: "name phone role" },
+          { path: "contributors.farmer", select: "name phone role" },
+        ],
       })
       .populate("procurementRequest");
 
@@ -311,7 +336,8 @@ const getCommitmentById = async (req, res) => {
       sameUser(lot?.farmer) ||
       sameUser(lot?.aggregator) ||
       sameUser(supplyIntent?.farmer) ||
-      sameUser(supplyPool?.aggregator);
+      sameUser(supplyPool?.aggregator) ||
+      (req.user.role === "farmer" && supplyPool?.contributors?.some((c) => sameUser(c.farmer)));
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -323,7 +349,9 @@ const getCommitmentById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: commitment,
+      data: req.user.role === "farmer" && supplyPool?.contributors?.some((c) => sameUser(c.farmer))
+        ? farmerSafeCommitment(commitment, req.user._id)
+        : commitment,
     });
   } catch (error) {
     console.error("Get commitment by ID error:", error);
@@ -425,6 +453,13 @@ const getCommitments = async (req, res) => {
       });
     } else if (req.user.role !== "admin") {
       commitments = [];
+    }
+
+    if (req.user.role === "farmer") {
+      commitments = commitments.map((item) => {
+        if (item.supplyPool?.contributors?.some((c) => sameUser(c.farmer))) return farmerSafeCommitment(item, req.user._id);
+        return item;
+      });
     }
 
     if (req.query.status) {

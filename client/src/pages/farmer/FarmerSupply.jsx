@@ -29,6 +29,7 @@ export default function FarmerSupply({ user = null }) {
   const [images, setImages] = useState([]);
   const [retainedImages, setRetainedImages] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [selectedProposalSource, setSelectedProposalSource] = useState(null);
   const [proposalDialog, setProposalDialog] = useState(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [proposalError, setProposalError] = useState("");
@@ -106,7 +107,7 @@ export default function FarmerSupply({ user = null }) {
     try {
       const action = proposalDialog.action === "approve" ? "approve" : "reject";
       await apiRequest(`/allocations/${proposalDialog.proposal._id}/${action}`, { method: "PATCH" });
-      setNotice(action === "approve" ? "Buyer proposal approved." : "Buyer proposal rejected.");
+      setNotice(action === "approve" ? "Buyer proposal approved; its quantity is now reserved. The purchase commitment is not yet confirmed." : "Buyer proposal rejected.");
       setProposalDialog(null);
       await load();
     } catch (e) { setProposalError(e.message || "The backend could not update this proposal."); }
@@ -143,19 +144,27 @@ export default function FarmerSupply({ user = null }) {
 
       {activeTab === "spot" ? <section id="spot-panel" role="tabpanel" aria-labelledby="spot-tab" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Available produce</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Active spot supply</h2><p className="mt-1 text-sm text-slate-500">Photo-led listings for produce available now.</p></div><button onClick={() => openCreate("spot")} className="w-fit rounded-xl bg-emerald-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-950">+ Add spot supply</button></div>
-        {loading ? <Loading /> : spotRecords.filter(searchMatch).length === 0 ? <Empty title="No active spot supply found" detail="Add a produce lot with quantity, price and availability to list it here." action="Add spot supply" onClick={() => openCreate("spot")} /> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{spotRecords.filter(searchMatch).map((item) => <SpotCard key={item._id} item={item} onEdit={() => openEdit("spot", item)} />)}</div>}
-        {!loading && <BuyerProposalsSection lots={spotRecords.filter(searchMatch)} allocations={allocations} onDecision={(proposal, action) => { setProposalError(""); setProposalDialog({ proposal, action }); }} /> }
+        {loading ? <Loading /> : spotRecords.filter(searchMatch).length === 0 ? <Empty title="No active spot supply found" detail="Add a produce lot with quantity, price and availability to list it here." action="Add spot supply" onClick={() => openCreate("spot")} /> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{spotRecords.filter(searchMatch).map((item) => <SpotCard key={item._id} item={item} onEdit={() => openEdit("spot", item)} onViewProposals={() => setSelectedProposalSource({ sourceType: "lot", item })} proposalCount={getBuyerProposalsForSource(allocations, "lot", item).length} />)}</div>}
       </section> : <section id="future-panel" role="tabpanel" aria-labelledby="future-tab" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">Planned harvest</p><h2 className="mt-1 text-2xl font-bold text-slate-950">Future supply intents</h2><p className="mt-1 text-sm text-slate-500">A text-first view of crops expected after harvest, without listing photos.</p></div><button onClick={() => openCreate("future")} className="w-fit rounded-xl border border-emerald-800 px-4 py-2.5 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-50">+ Create future intent</button></div>
-        {loading ? <Loading /> : futureRecords.filter(searchMatch).length === 0 ? <Empty title="No future intents found" detail="Create an intent to tell buyers what you expect to harvest and when." action="Create future intent" onClick={() => openCreate("future")} /> : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="hidden grid-cols-[1.3fr_.7fr_.8fr_.7fr_auto] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 md:grid"><span>Crop / location</span><span>Expected quantity</span><span>Harvest date</span><span>Status</span><span>Action</span></div><div className="divide-y divide-slate-100">{futureRecords.filter(searchMatch).map((item) => <FutureRow key={item._id} item={item} onEdit={() => openEdit("future", item)} />)}</div></div>}
+        {loading ? <Loading /> : futureRecords.filter(searchMatch).length === 0 ? <Empty title="No future intents found" detail="Create an intent to tell buyers what you expect to harvest and when." action="Create future intent" onClick={() => openCreate("future")} /> : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="hidden grid-cols-[1.3fr_.7fr_.8fr_.7fr_auto] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 md:grid"><span>Crop / location</span><span>Expected quantity</span><span>Harvest date</span><span>Status</span><span>Action</span></div><div className="divide-y divide-slate-100">{futureRecords.filter(searchMatch).map((item) => <FutureRow key={item._id} item={item} onEdit={() => openEdit("future", item)} onViewProposals={() => setSelectedProposalSource({ sourceType: "supply_intent", item })} proposalCount={getBuyerProposalsForSource(allocations, "supply_intent", item).length} />)}</div></div>}
       </section>}
     </section>
 
-    {proposalDialog && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" role="presentation">
+    {selectedProposalSource && <BuyerProposalsDialog
+      source={selectedProposalSource.item}
+      sourceType={selectedProposalSource.sourceType}
+      proposals={getBuyerProposalsForSource(allocations, selectedProposalSource.sourceType, selectedProposalSource.item)}
+      busy={proposalBusy}
+      onClose={() => setSelectedProposalSource(null)}
+      onDecision={(proposal, action) => { setProposalError(""); setProposalDialog({ proposal, action }); }}
+    />}
+
+    {proposalDialog && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" role="presentation">
       <section role="dialog" aria-modal="true" aria-labelledby="proposal-decision-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Buyer-proposed allocation</p>
         <h2 id="proposal-decision-title" className="mt-2 text-xl font-bold text-slate-950">{proposalDialog.action === "approve" ? "Approve this proposal?" : "Reject this proposal?"}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{proposalDialog.action === "approve" ? "Approving reserves the proposed quantity against this supply, subject to backend validation." : "Rejecting declines this buyer's proposal. This action will be sent to the backend."}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{proposalDialog.action === "approve" ? "Approval moves this allocation from proposed to reserved, subject to backend validation. It does not confirm the purchase commitment or payment." : "Rejecting declines this buyer's proposal. The rejected proposal remains in the history."}</p>
         <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
           <p className="font-semibold text-slate-900">{proposalDialog.proposal?.crop || proposalDialog.proposal?.sourceId?.crop || "Selected supply proposal"}</p>
           <p className="mt-1 text-slate-600">Proposed quantity: {fmt(proposalDialog.proposal?.allocatedQuantity ?? proposalDialog.proposal?.quantity)} {proposalDialog.proposal?.unit || "units"}</p>
@@ -172,7 +181,7 @@ export default function FarmerSupply({ user = null }) {
   </div>;
 }
 
-function SpotCard({ item, onEdit }) {
+function SpotCard({ item, onEdit, onViewProposals, proposalCount = 0 }) {
   const photos = Array.isArray(item.images) ? item.images : [];
   const imageUrl = getImageUrl(photos[0]);
   const canEdit = ["available", "draft"].includes(item.status);
@@ -208,75 +217,108 @@ function SpotCard({ item, onEdit }) {
           <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Available from</p><p className="mt-1 text-xs font-semibold text-slate-700">{date(item.availableFrom || item.harvestDate)}</p></div>
           <button onClick={onEdit} disabled={!canEdit} title={!canEdit ? "Editing is disabled after reservation or commitment" : "Edit listing"} className="rounded-xl border border-emerald-200 px-3.5 py-2 text-xs font-bold text-emerald-900 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">{canEdit ? "View / edit" : "View only"}</button>
         </div>
+        <button type="button" onClick={onViewProposals} className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-bold text-emerald-900 transition hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100">
+          <span>View buyer proposals</span>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">{proposalCount}</span>
+        </button>
       </div>
     </article>
   );
 }
 
-function BuyerProposalsSection({ lots, allocations, onDecision }) {
-  const proposals = allocations.filter((allocation) =>
-    (allocation?.initiatedBy || "buyer") === "buyer" &&
-    String(allocation?.sourceType || "").toLowerCase() === "lot" &&
-    lots.some((lot) => String(lot?._id || lot?.id || "") === String(allocation?.sourceId?._id || allocation?.sourceId || ""))
-  );
+function getBuyerProposalsForSource(allocations, sourceType, source) {
+  const sourceId = String(source?._id || source?.id || "");
+  if (!sourceId) return [];
+
+  return allocations
+    .filter((allocation) =>
+      (allocation?.initiatedBy || "buyer") === "buyer" &&
+      String(allocation?.sourceType || "").toLowerCase() === sourceType &&
+      String(allocation?.sourceId?._id || allocation?.sourceId || "") === sourceId
+    )
+    .sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+}
+
+function BuyerProposalsDialog({ source, sourceType, proposals, busy, onClose, onDecision }) {
+  const isFutureIntent = sourceType === "supply_intent";
+  const sourceLabel = isFutureIntent ? "Future intent" : "Spot supply";
+  const sourceQuantity = isFutureIntent ? source?.expectedQuantity : source?.quantity;
+  const sourceDate = isFutureIntent ? source?.expectedHarvestDate : source?.availableFrom || source?.harvestDate;
   const statusClass = (status) => {
     const value = String(status || "unknown").toLowerCase();
-    if (["reserved", "committed", "fulfilled", "accepted", "approved"].includes(value)) return "bg-emerald-50 text-emerald-800";
-    if (["rejected", "cancelled", "declined", "released"].includes(value)) return "bg-rose-50 text-rose-700";
+    if (["reserved", "committed", "fulfilled"].includes(value)) return "bg-emerald-50 text-emerald-800";
+    if (["rejected", "cancelled", "released"].includes(value)) return "bg-rose-50 text-rose-700";
     return "bg-amber-50 text-amber-800";
   };
 
   return (
-    <section className="mt-8 space-y-4">
-      <div className="flex flex-col gap-1 border-b border-slate-200 pb-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Buyer-proposed allocations</p>
-        <h3 className="text-xl font-bold text-slate-950">Proposals for your specific supply</h3>
-        <p className="text-sm text-slate-500">Only proposals linked to one of your spot listings are shown here. Accepted, pending and rejected records remain visible.</p>
-      </div>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="buyer-proposals-title" className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{sourceLabel} · Buyer proposals</p>
+            <h2 id="buyer-proposals-title" className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">{source?.crop || "Selected supply"}{source?.variety ? ` · ${source.variety}` : ""}</h2>
+            <p className="mt-1 text-sm text-slate-500">{fmt(sourceQuantity)} {source?.unit || "units"} {isFutureIntent ? "expected" : "listed"}{sourceDate ? ` · ${isFutureIntent ? "Harvest" : "Available from"} ${date(sourceDate)}` : ""} · {proposals.length} proposal{proposals.length === 1 ? "" : "s"}</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close buyer proposals" className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Close</button>
+        </header>
 
-      {proposals.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
-          <p className="font-semibold text-slate-700">No buyer proposals for these listings yet</p>
-          <p className="mt-1 text-sm text-slate-500">When a buyer proposes a specific lot against their procurement request, it will appear here.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {proposals.map((proposal) => {
-            const lotId = String(proposal?.sourceId?._id || proposal?.sourceId || "");
-            const lot = lots.find((entry) => String(entry?._id || entry?.id || "") === lotId);
+        <div className="max-h-[calc(90vh-100px)] space-y-3 overflow-y-auto p-4 sm:p-6">
+          {proposals.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center">
+              <p className="font-semibold text-slate-800">No buyer proposals for this {isFutureIntent ? "future intent" : "spot listing"} yet</p>
+              <p className="mt-1 text-sm text-slate-500">Proposals linked to this exact {isFutureIntent ? "planned harvest" : "spot listing"} will appear here, including their status history.</p>
+            </div>
+          ) : proposals.map((proposal) => {
             const request = proposal?.procurementRequest && typeof proposal.procurementRequest === "object" ? proposal.procurementRequest : null;
-            const id = proposal?._id || `${lotId}-${request?._id || "request"}`;
+            const status = String(proposal?.status || "proposed").toLowerCase();
             return (
-              <article key={id} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1.3fr_1fr_auto] sm:items-center sm:p-5">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your supply</p>
-                  <h4 className="mt-1 font-bold text-slate-950">{lot?.crop || "Spot listing"}{lot?.variety ? ` · ${lot.variety}` : ""}</h4>
-                  <p className="mt-1 text-xs text-slate-500">{[lot?.location?.village, lot?.location?.district].filter(Boolean).join(", ") || "Location not set"} · Listing quantity: {fmt(lot?.quantity)} {lot?.unit || "units"}</p>
+              <article key={proposal?._id || `${proposal?.createdAt}-${proposal?.allocatedQuantity}`} className="rounded-xl border border-slate-200 p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Buyer demand</p>
+                    <h3 className="mt-1 font-bold text-slate-950">{request?.crop || source?.crop || "Procurement request"}{request?.variety ? ` · ${request.variety}` : ""}</h3>
+                    <p className="mt-1 text-sm text-slate-600">Proposed quantity: <strong>{fmt(proposal?.allocatedQuantity ?? proposal?.quantity)} {proposal?.unit || source?.unit || "units"}</strong></p>
+                    <p className="mt-1 text-xs text-slate-500">Buyer request: {request ? `${fmt(request.quantity)} ${request.unit || proposal.unit || "units"}` : "Details unavailable"}{request?.requiredBy ? ` · Required by ${date(request.requiredBy)}` : ""}</p>
+                    {proposal?.createdAt && <p className="mt-1 text-xs text-slate-400">Submitted {date(proposal.createdAt)}</p>}
+                  </div>
+                  <span className={`inline-flex w-fit shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${statusClass(status)}`}>{label(status)}</span>
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Buyer request</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">{request?.crop || lot?.crop || "Procurement request"}{request?.variety ? ` · ${request.variety}` : ""}</p>
-                  <p className="mt-1 text-xs text-slate-500">Requested: {request ? `${fmt(request.quantity)} ${request.unit || proposal.unit || "units"}` : "Request details unavailable"}{request?.requiredBy ? ` · Required by ${date(request.requiredBy)}` : ""}</p>
-                  <p className="mt-1 text-xs text-slate-500">Proposed quantity: {fmt(proposal.allocatedQuantity ?? proposal.quantity)} {proposal.unit || lot?.unit || "units"}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${statusClass(proposal.status)}`}>{label(proposal.status)}</span>
-                  {request?.status && <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">Request: {label(request.status)}</span>}
-                  {String(proposal.status || "proposed").toLowerCase() === "proposed" && proposal?._id && <div className="mt-1 flex gap-2">
-                    <button type="button" onClick={() => onDecision(proposal, "approve")} className="rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-900">Approve</button>
-                    <button type="button" onClick={() => onDecision(proposal, "reject")} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50">Reject</button>
-                  </div>}
-                </div>
+                {status === "proposed" && proposal?._id && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                  <button type="button" disabled={busy} onClick={() => onDecision(proposal, "approve")} className="rounded-lg bg-emerald-800 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50">Approve & reserve</button>
+                  <button type="button" disabled={busy} onClick={() => onDecision(proposal, "reject")} className="rounded-lg border border-rose-200 px-4 py-2.5 text-xs font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">Reject proposal</button>
+                </div>}
+                {status === "reserved" && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">Quantity reserved. The purchase commitment is a separate step.</p>}
               </article>
             );
           })}
         </div>
-      )}
-    </section>
+      </section>
+    </div>
   );
 }
 
-function FutureRow({ item, onEdit }) { const canEdit = ["available", "draft", "pending"].includes(item.status); return <div className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[1.3fr_.7fr_.8fr_.7fr_auto] md:items-center md:gap-4"><div><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"/><h3 className="font-bold text-slate-900">{item.crop || "Unnamed crop"}</h3></div><p className="mt-1 text-xs text-slate-500">{item.variety || "Variety not specified"} · {[item.location?.village, item.location?.district, item.location?.state].filter(Boolean).join(", ") || "Location not set"}</p></div><div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 md:hidden">Expected quantity</p><p className="text-sm font-semibold text-slate-700">{fmt(item.expectedQuantity)} {item.unit || "units"}</p></div><div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 md:hidden">Expected harvest</p><p className="text-sm font-semibold text-slate-700">{date(item.expectedHarvestDate)}</p></div><div><span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-800">{label(item.status)}</span></div><div><button onClick={onEdit} disabled={!canEdit} title={!canEdit ? "Editing is disabled for this status" : "View or edit future intent"} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-40">{canEdit ? "View / edit" : "View only"}</button></div></div>; }
+function FutureRow({ item, onEdit, onViewProposals, proposalCount = 0 }) {
+  const canEdit = ["available", "draft", "pending"].includes(item.status);
+
+  return (
+    <div className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[1.3fr_.7fr_.8fr_.7fr_auto] md:items-center md:gap-4">
+      <div>
+        <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-500"/><h3 className="font-bold text-slate-900">{item.crop || "Unnamed crop"}</h3></div>
+        <p className="mt-1 text-xs text-slate-500">{item.variety || "Variety not specified"} · {[item.location?.village, item.location?.district, item.location?.state].filter(Boolean).join(", ") || "Location not set"}</p>
+      </div>
+      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 md:hidden">Expected quantity</p><p className="text-sm font-semibold text-slate-700">{fmt(item.expectedQuantity)} {item.unit || "units"}</p></div>
+      <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 md:hidden">Expected harvest</p><p className="text-sm font-semibold text-slate-700">{date(item.expectedHarvestDate)}</p></div>
+      <div><span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-800">{label(item.status)}</span></div>
+      <div className="flex flex-wrap gap-2 md:flex-col md:items-stretch">
+        <button onClick={onEdit} disabled={!canEdit} title={!canEdit ? "Editing is disabled for this status" : "View or edit future intent"} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-40">{canEdit ? "View / edit" : "View only"}</button>
+        <button type="button" onClick={onViewProposals} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900 transition hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100">
+          <span>View proposals</span><span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-emerald-800">{proposalCount}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 function getImageUrl(image) {
   if (typeof image === "string") return image;
   return image?.url || image?.publicUrl || image?.public_url || image?.src || "";

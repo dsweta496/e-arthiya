@@ -182,3 +182,39 @@ export async function getFarmerAllocations(farmerId, params = {}) {
 export async function getFarmerAllocationAvailability(sourceType, sourceId) {
   return apiRequest(`/allocations/availability/${sourceType}/${sourceId}`);
 }
+
+// Commitment workflow helpers
+export async function getCommitmentBlockchainAnchors(commitmentId) {
+  return apiRequest(`/blockchain/anchors/commitment/${commitmentId}`);
+}
+
+export async function approveFarmerAllocation(allocationId) {
+  return apiRequest(`/allocations/${allocationId}/approve`, { method: "PATCH" });
+}
+
+export async function rejectFarmerAllocation(allocationId) {
+  return apiRequest(`/allocations/${allocationId}/reject`, { method: "PATCH" });
+}
+
+export async function approveFarmerCommitment(commitmentId) {
+  return apiRequest(`/commitments/${commitmentId}/approve`, { method: "POST" });
+}
+
+// ================================
+// AUCTION HELPERS — RESTORED
+// ================================
+
+export async function getAuctionBids(auctionId) {
+  return apiRequest(`/auctions/${auctionId}/bids`);
+}
+
+export async function updateFarmerAuction(auctionId, payload) {
+  return apiRequest(`/auctions/${auctionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAuctionBlockchainProofs(auctionId) {
+  return apiRequest(`/blockchain/anchors/auction/${auctionId}`);
+}
