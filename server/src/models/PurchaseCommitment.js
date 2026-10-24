@@ -118,6 +118,7 @@ const purchaseCommitmentSchema = new mongoose.Schema(
         "fulfilled",
         "settled",
         "cancelled",
+        "expired",
         "defaulted",
         "re_matching",
         "reallocated",

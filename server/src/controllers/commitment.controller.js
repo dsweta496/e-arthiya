@@ -182,6 +182,9 @@ const createCommitment = async (req, res) => {
         commitmentData
       );
 
+    auction.lot.status = "committed";
+    await auction.lot.save();
+
     const blockchain = await recordBlockchainAnchor({ entityType: "commitment", entityId: commitment._id, eventType: "COMMITMENT_CREATED", payload: { commitmentId: String(commitment._id), source: commitment.source, agreedPrice: commitment.agreedPrice, quantity: commitment.quantity, unit: commitment.unit, depositAmount: commitment.depositAmount, status: commitment.status }, recordedBy: req.user._id });
     res.status(201).json({
       success: true,
@@ -687,17 +690,17 @@ const createCommitmentFromReservedSupply = async (req, res) => {
     const duplicateQuery = auction
       ? { auction: auction._id }
       : {
-          [sourceType === "lot" ? "lot" : "supplyIntent"]: source._id,
-          status: {
-            $nin: [
-              "cancelled",
-              "defaulted",
-              "reallocated",
-              "spot_rerouted",
-              "flash_sale",
-            ],
-          },
-        };
+        [sourceType === "lot" ? "lot" : "supplyIntent"]: source._id,
+        status: {
+          $nin: [
+            "cancelled",
+            "defaulted",
+            "reallocated",
+            "spot_rerouted",
+            "flash_sale",
+          ],
+        },
+      };
 
     const duplicate = await PurchaseCommitment.findOne(duplicateQuery);
 
@@ -726,12 +729,15 @@ const createCommitmentFromReservedSupply = async (req, res) => {
       status: "confirmed",
       commitmentWindowEndsAt: new Date(
         Date.now() +
-          (sourceType === "lot" ? 7 : 30) * 24 * 60 * 60 * 1000
+        (sourceType === "lot" ? 7 : 30) * 24 * 60 * 60 * 1000
       ),
     };
 
     createdCommitment =
       await PurchaseCommitment.create(commitmentData);
+
+    source.status = "committed";
+    await source.save();
 
     // Anchor the commitment before marking the source committed.
     const blockchain = await recordBlockchainAnchor({
@@ -788,7 +794,7 @@ const createCommitmentFromReservedSupply = async (req, res) => {
         error.code === 11000
           ? "A commitment already exists"
           : error.message ||
-            "Unable to create commitment from reserved supply",
+          "Unable to create commitment from reserved supply",
       ...(createdCommitment
         ? { commitmentId: String(createdCommitment._id) }
         : {}),

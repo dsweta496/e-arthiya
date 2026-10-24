@@ -59,11 +59,6 @@ const navConfig = {
               icon: "grid",
             },
             {
-              label: "Operations Centre",
-              path: "/farmer/operations",
-              icon: "grid",
-            },
-            {
               label: "My Supply",
               path: "/farmer/supply",
               icon: "package",

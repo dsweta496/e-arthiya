@@ -184,4 +184,157 @@ async function getPayments(req, res) {
   } catch (error) { return apiError(res, 500, error.message || "Unable to retrieve payments"); }
 }
 
-module.exports = { createDepositPayment, createBalancePayment, createRefundPayment, getPaymentById, getPayments };
+async function completePaymentReceived(req, res) {
+  const { commitmentId } = req.params;
+
+  if (!mongoose.isValidObjectId(commitmentId)) {
+    return apiError(res, 400, "Invalid commitment ID");
+  }
+
+  const session = await mongoose.startSession();
+  let payment;
+  let commitment;
+
+  try {
+    await session.withTransaction(async () => {
+      commitment = await PurchaseCommitment.findById(commitmentId)
+        .session(session);
+
+      if (!commitment) {
+        const e = new Error("Commitment not found");
+        e.statusCode = 404;
+        throw e;
+      }
+
+      if (!commitment.lot) {
+        const e = new Error(
+          "This action currently supports physical produce lots only"
+        );
+        e.statusCode = 400;
+        throw e;
+      }
+
+      const lot = await ProduceLot.findById(commitment.lot)
+        .session(session);
+
+      if (!lot) {
+        const e = new Error("Produce lot not found");
+        e.statusCode = 404;
+        throw e;
+      }
+
+      if (!sameId(lot.farmer, req.user._id)) {
+        const e = new Error(
+          "Only the supplying farmer can confirm receipt"
+        );
+        e.statusCode = 403;
+        throw e;
+      }
+
+      if (commitment.status === "fulfilled") {
+        const e = new Error("This commitment is already fulfilled");
+        e.statusCode = 409;
+        throw e;
+      }
+
+      if (
+        !["confirmed", "active"].includes(commitment.status) ||
+        lot.status !== "committed"
+      ) {
+        const e = new Error(
+          "Only committed produce can be marked fulfilled"
+        );
+        e.statusCode = 409;
+        throw e;
+      }
+
+      const key = `farmer-payment-received:${commitment._id}`;
+
+      const existing = await PaymentTransaction.findOne({
+        idempotencyKey: key,
+      }).session(session);
+
+      if (existing) {
+        const e = new Error("Payment receipt has already been logged");
+        e.statusCode = 409;
+        throw e;
+      }
+
+      const total = money(
+        Number(commitment.agreedPrice) *
+        Number(commitment.quantity)
+      );
+
+      const now = new Date();
+
+      [payment] = await PaymentTransaction.create([{
+        commitment: commitment._id,
+        payer: commitment.buyer || req.user._id,
+        receiver: req.user._id,
+        type: "settlement",
+        amount: total,
+        currency: "INR",
+        status: "completed",
+        paymentMethod: "demo",
+        transactionReference: `DEMO-RECEIVED-${commitment._id}`,
+        idempotencyKey: key,
+        paidAt: now,
+      }], { session });
+
+      commitment.status = "fulfilled";
+      await commitment.save({ session });
+
+      lot.status = "sold";
+      await lot.save({ session });
+    });
+
+    let blockchain = null;
+
+    try {
+      blockchain = await recordBlockchainAnchor({
+        entityType: "payment",
+        entityId: payment._id,
+        eventType: "PAYMENT_SETTLED",
+        payload: {
+          paymentId: String(payment._id),
+          commitmentId: String(commitment._id),
+          amount: payment.amount,
+          status: payment.status,
+          commitmentStatus: commitment.status,
+          demo: true,
+        },
+        recordedBy: req.user._id,
+      });
+    } catch (anchorError) {
+      // The database record is already saved. Log anchor failure separately.
+      console.error("Payment anchor failed:", anchorError.message);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Payment receipt logged and produce marked fulfilled",
+      data: { payment, commitment },
+      blockchain,
+      paymentNotice:
+        "Demo receipt record only. No money was transferred or verified.",
+    });
+  } catch (error) {
+    console.error("Complete payment received error:", error);
+    return apiError(
+      res,
+      error.statusCode || 500,
+      error.message || "Unable to complete payment receipt"
+    );
+  } finally {
+    await session.endSession();
+  }
+}
+
+module.exports = {
+  createDepositPayment,
+  createBalancePayment,
+  createRefundPayment,
+  getPaymentById,
+  getPayments,
+  completePaymentReceived,
+};

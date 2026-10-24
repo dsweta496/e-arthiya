@@ -227,3 +227,10 @@ export async function createCommitmentFromReservedSupply(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export async function completeFarmerPaymentReceived(commitmentId) {
+  return apiRequest(
+    `/payments/commitments/${commitmentId}/complete-received`,
+    { method: "POST" }
+  );
+}

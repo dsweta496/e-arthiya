@@ -51,7 +51,6 @@ function FarmerDashboard({ user = null }) {
         ...intents.map((intent) => ({ ...intent, kind: "Future", quantity: intent.expectedQuantity, date: intent.expectedHarvestDate })),
     ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 5);
     return (<div className="space-y-7">
-      <div className="flex justify-end"><Link to="/farmer/operations" className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50">Open operations centre <span aria-hidden="true">↗</span></Link></div>
       <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Farmer workspace</p>
