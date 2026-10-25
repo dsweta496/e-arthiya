@@ -63,6 +63,7 @@ const procurementRequestSchema = new mongoose.Schema(
       enum: [
         "draft",
         "open",
+        "reserved",
         "partially_fulfilled",
         "fulfilled",
         "cancelled",

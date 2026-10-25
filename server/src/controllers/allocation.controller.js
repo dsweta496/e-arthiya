@@ -48,7 +48,7 @@ async function assertCanManageSource(req, source) {
   const userId = req.user._id.toString();
   if (req.user.role === "farmer" && source.farmer && source.farmer.toString() === userId) return;
   if (["fpo", "arthiya"].includes(req.user.role) && req.user.verificationStatus === "verified" &&
-      source.aggregatorType === req.user.role && source.aggregator && source.aggregator.toString() === userId) return;
+    source.aggregatorType === req.user.role && source.aggregator && source.aggregator.toString() === userId) return;
   throw httpError("You are not authorized to manage this supply source", 403);
 }
 
